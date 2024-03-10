@@ -29,11 +29,18 @@ class MSQLite:
         self.artificial_delay = None
 
     def set_artificial_delay(self, delay: float):
+        """
+        Set an artificial delay for testing purposes.
+        :param delay: delay in seconds
+        """
         self.artificial_delay = delay
 
     def execute_multiple(self, statements: list[str]) -> sqlite3.Cursor:
         """
-        Execute a command on a sqlite3 database, with an auto-commit and a retry mechanism to handle multiple threads/processes.
+        Execute statements on a sqlite3 database, with an auto-commit and a retry mechanism to handle multiple threads/processes.
+
+        :param statements: list of SQL statements
+        :return: sqlite3.Cursor
         """
 
         start = time.time()
@@ -67,7 +74,10 @@ class MSQLite:
 
     def execute(self, statement: str) -> sqlite3.Cursor:
         """
-        Execute a command on a sqlite3 database, with an auto-commit and a retry mechanism to handle multiple threads/processes.
+        Execute a statement on a sqlite3 database, with an auto-commit and a retry mechanism to handle multiple threads/processes.
+
+        :param statement: SQL statement
+        :return: sqlite3.Cursor from last statement
         """
 
         return self.execute_multiple([statement])

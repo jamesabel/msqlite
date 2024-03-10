@@ -1,4 +1,3 @@
-import sqlite3
 from pathlib import Path
 from multiprocessing import Pool
 import time
@@ -13,45 +12,68 @@ def get_temp_dir() -> Path:
     return temp_dir
 
 
-def test_msqlite_single_thread():
-    print(f"{sqlite3.threadsafety=}")
+table_name = "stuff"
 
-    db_path = Path(get_temp_dir(), "test_msqlite_db")
+
+def test_msqlite_single_thread():
+    db_path = Path(get_temp_dir(), "test_msqlite.sqlite")
     db_path.unlink(missing_ok=True)
     db = MSQLite(db_path)
-    db.execute("CREATE TABLE stuff(name, color, year)")
-    db.execute("INSERT INTO stuff VALUES ('plate', 'brown', 2020), ('chair', 'black', 2019)")
-    response = db.execute("SELECT * FROM stuff")
-    for row in response:
-        print(row)
-    db.execute("UPDATE stuff SET color='red' WHERE name='table'")
-    response = db.execute("SELECT * FROM stuff")
-    for row in response:
-        print(row)
-    print(f"{db.retry_count=}")
-    print(f"{db.execution_times=}")
+    # create table
+    db.execute(f"CREATE TABLE {table_name}(name, color, year)")
+    # insert
+    db.execute(f"INSERT INTO {table_name} VALUES ('plate', 'brown', 2020), ('chair', 'black', 2019)")
+    _response = db.execute(f"SELECT * FROM {table_name}")
+    response = list(_response)
+    assert response == [('plate', 'brown', 2020), ('chair', 'black', 2019)]
+    # update table
+    db.execute(f"UPDATE {table_name} SET color='red' WHERE name='plate'")
+    _response = db.execute(f"SELECT * FROM {table_name}")
+    response = list(_response)
+    assert response == [('plate', 'red', 2020), ('chair', 'black', 2019)]
+    max_execution_time = max(db.execution_times)
+    print(f"{max_execution_time=}")
+    assert max_execution_time < 1.0  # 0.016998291015625 has been observed
 
 
-mp_db_path = Path(get_temp_dir(), "test_msqlite_multi_process.db")
+def test_msqlite_single_thread_execute_multiple():
+    db_path = Path(get_temp_dir(), "test_msqlite_execute_multiple.sqlite")
+    db_path.unlink(missing_ok=True)
+    db = MSQLite(db_path)
+    db.execute(f"CREATE TABLE {table_name}(name, color, year)")
+    statements = []
+    statements.append(f"INSERT INTO {table_name} VALUES ('plate', 'brown', 2020)")
+    statements.append(f"INSERT INTO {table_name} VALUES ('chair', 'black', 2019)")
+    db.execute_multiple(statements)
+    _response = db.execute(f"SELECT * FROM {table_name}")
+    response = list(_response)
+    assert response == [('plate', 'brown', 2020), ('chair', 'black', 2019)]
 
 
-def _access_db(value: int):
+mp_db_path = Path(get_temp_dir(), "test_msqlite_multi_process.sqlite")
+
+
+def _write_db(value: int):
     db = MSQLite(mp_db_path)
-    db.set_artificial_delay(MAX_BACKOFF)  # delay so we'll get some retries
-    db.execute(f"INSERT INTO stuff VALUES ({value}, {time.time()})")
+    db.set_artificial_delay(MAX_BACKOFF)  # delay so we'll get some retries (just for testing)
+    db.execute(f"INSERT INTO {table_name} VALUES ({value}, {time.time()})")
     if (retry_count := db.retry_count) > 0:
-        print(f"{value=}:{retry_count=}")
+        print(f"{value=}:{retry_count=}", flush=True)
     return db.retry_count
 
 
-def test_msqllite_multi_thread():
-    print(f"{sqlite3.threadsafety=}")
-
+def test_msqlite_multi_process():
     mp_db_path.unlink(missing_ok=True)
     db = MSQLite(mp_db_path)
-    db.execute("CREATE TABLE stuff(thing INTEGER PRIMARY KEY, ts NUMERIC)")
-    processes = 1000  # enough so that we'll have at least a few retries
-    with Pool() as pool:
-        results = pool.map(_access_db, range(processes))
-        retries = sum(results)
-        assert retries > 10
+    db.execute(f"CREATE TABLE {table_name}(thing INTEGER PRIMARY KEY, ts NUMERIC)")
+    processes = 200  # enough to have at least several retries
+    with Pool(16) as pool:
+        print(f"{pool._processes=}")
+        results = pool.map(_write_db, range(processes))
+        processes_with_retries = len([r for r in results if r > 0])
+        overall_retries = sum(results)
+        max_retries = max(results)
+        print(f"{overall_retries=},{max_retries=},{processes_with_retries=}")
+        assert overall_retries > 5  # 27 has been observed after 24 seconds
+        assert processes_with_retries > 2  # 16 has been observed
+        assert max_retries > 1  # should be enough processes so that at least one has to retry at least twice
