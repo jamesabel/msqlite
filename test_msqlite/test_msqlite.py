@@ -3,7 +3,7 @@ from multiprocessing import Pool
 import time
 
 from src.msqlite import MSQLite
-from src.msqlite.msqlite import MAX_BACKOFF
+from src.msqlite.msqlite import BACKOFF
 
 
 def get_temp_dir() -> Path:
@@ -55,7 +55,7 @@ mp_db_path = Path(get_temp_dir(), "test_msqlite_multi_process.sqlite")
 
 def _write_db(value: int):
     db = MSQLite(mp_db_path)
-    db.set_artificial_delay(MAX_BACKOFF)  # delay so we'll get some retries (just for testing)
+    db.set_artificial_delay(BACKOFF)  # delay so we'll get some retries (just for testing)
     db.execute(f"INSERT INTO {table_name} VALUES ({value}, {time.time()})")
     if (retry_count := db.retry_count) > 0:
         print(f"{value=}:{retry_count=}", flush=True)

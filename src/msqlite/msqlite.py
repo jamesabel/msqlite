@@ -6,8 +6,8 @@ from pathlib import Path
 
 log = getLogger()
 
-MAX_TRIES = 10000
-MAX_BACKOFF = 0.1  # seconds
+MAX_TRIES = 200
+BACKOFF = 0.1  # seconds
 
 
 class MSQLiteMaxRetriesError(sqlite3.OperationalError):
@@ -26,6 +26,7 @@ class MSQLite:
         self.db_path = db_path
         self.execution_times = []
         self.retry_count = 0
+        self.backoff = BACKOFF
         self.artificial_delay = None
 
     def __enter__(self):
@@ -74,7 +75,8 @@ class MSQLite:
                         raise MSQLiteMaxRetriesError(f"Database is still locked after {count} tries,{duration=}")
                     new_cursor = None
                     self.retry_count += 1
-                    sleep_time = random.random() * MAX_BACKOFF
+                    sleep_time = random.random() * self.backoff
+                    self.backoff *= 1.01  # increase the backoff a little each time we encounter a locked database
                     log.info(f"Database is locked, retrying {count}/{MAX_TRIES},{sleep_time=}")
                     time.sleep(sleep_time)
                 else:
