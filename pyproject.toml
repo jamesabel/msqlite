@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "msqlite"
+version = "0.0.3"
+description = "Execute simple SQLite statements that are multithreaded/multiprocess safe"
+readme = "README.md"
+authors = [{ name = "James Abel", email = "j@abel.co" }]
+license = { file="LICENSE" }
+keywords = ["sqlite", "multithread", "multiprocess"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.urls]
+Source = "https://github.com/jamesabel/msqlite"
