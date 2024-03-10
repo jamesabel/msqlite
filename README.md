@@ -1,6 +1,16 @@
 # msqlite
 
-multi-threaded/multi-process additions to SQLite
+Multi-threaded/multi-process support on top of SQLite. The intent is to ensure a SQL statement
+will get executed, even if other threads or processes are trying to access the DB. Avoids 
+`database is locked` issues. 
+
+No additional package dependencies beyond regular Python.
+
+Intended for relatively simple SQL statement execution. Locks the DB file on every access, with 
+built-in retry mechanism.
+
+Even though the DB is locked on every access, typically simple writes are much less than 1 second
+(more like 1 mS), so this latency is still usable for many use cases.
 
 ```python
 import time
