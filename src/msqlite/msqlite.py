@@ -4,9 +4,9 @@ import time
 import random
 from pathlib import Path
 
-log = getLogger(__name__)
+log = getLogger()
 
-MAX_TRIES = 1000
+MAX_TRIES = 10000
 MAX_BACKOFF = 0.1  # seconds
 
 
@@ -57,7 +57,7 @@ class MSQLite:
 
         count = 0
         new_cursor = None
-        while new_cursor is None and count <= MAX_TRIES:
+        while new_cursor is None:
             count += 1
             try:
                 conn.execute("BEGIN EXCLUSIVE TRANSACTION")  # lock the database
@@ -69,14 +69,19 @@ class MSQLite:
             except sqlite3.OperationalError as e:
                 if "database is locked" in str(e):
                     conn.rollback()
+                    if count >= MAX_TRIES:
+                        duration = time.time() - start
+                        raise MSQLiteMaxRetriesError(f"Database is still locked after {count} tries,{duration=}")
                     new_cursor = None
                     self.retry_count += 1
-                    log.info(f"Database is locked, retrying {count}/{MAX_TRIES}")
-                    time.sleep(random.random() * MAX_BACKOFF)
+                    sleep_time = random.random() * MAX_BACKOFF
+                    log.info(f"Database is locked, retrying {count}/{MAX_TRIES},{sleep_time=}")
+                    time.sleep(sleep_time)
                 else:
-                    log.warning(e)
+                    # something other than locked database
+                    raise
         if new_cursor is None:
-            raise MSQLiteMaxRetriesError(f"Database is locked after {count} tries")
+            conn.close()
         self.execution_times.append(time.time() - start)
         return new_cursor
 
