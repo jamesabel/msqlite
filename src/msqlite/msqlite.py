@@ -28,9 +28,17 @@ class MSQLite:
         self.retry_count = 0
         self.artificial_delay = None
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self):
+        max_execution_time = max(self.execution_times)
+        log.info(f"{max_execution_time=}")
+        log.info(f"{self.retry_count=}")
+
     def set_artificial_delay(self, delay: float):
         """
-        Set an artificial delay for testing purposes.
+        Set an artificial delay for testing purposes. Is not normally used.
         :param delay: delay in seconds
         """
         self.artificial_delay = delay

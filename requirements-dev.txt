@@ -1,3 +1,5 @@
+build
+twine
 pytest
 pytest-xdist
 pytest-pycharm

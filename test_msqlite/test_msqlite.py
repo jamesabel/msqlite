@@ -2,8 +2,8 @@ from pathlib import Path
 from multiprocessing import Pool
 import time
 
-from msqlite import MSQLite
-from msqlite.msqlite import MAX_BACKOFF
+from src.msqlite import MSQLite
+from src.msqlite.msqlite import MAX_BACKOFF
 
 
 def get_temp_dir() -> Path:
