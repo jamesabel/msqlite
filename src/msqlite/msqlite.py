@@ -6,12 +6,8 @@ from pathlib import Path
 
 log = getLogger()
 
-MAX_TRIES = 200
-BACKOFF = 0.1  # seconds
 
-
-class MSQLiteMaxRetriesError(sqlite3.OperationalError):
-    ...
+class MSQLiteMaxRetriesError(sqlite3.OperationalError): ...
 
 
 class MSQLite:
@@ -26,7 +22,6 @@ class MSQLite:
         self.db_path = db_path
         self.execution_times = []
         self.retry_count = 0
-        self.backoff = BACKOFF
         self.artificial_delay = None
         self.conn = None
 
@@ -59,32 +54,29 @@ class MSQLite:
         """
 
         start = time.time()
-        self.conn = sqlite3.connect(self.db_path, isolation_level="EXCLUSIVE")
-        cursor = self.conn.cursor()
 
         count = 0
         new_cursor = None
         while new_cursor is None:
             count += 1
             try:
+                self.conn = sqlite3.connect(self.db_path, isolation_level="EXCLUSIVE")
+                cursor = self.conn.cursor()
                 self.conn.execute("BEGIN EXCLUSIVE TRANSACTION")  # lock the database
                 for statement in statements:
                     new_cursor = cursor.execute(statement)
                 if self.artificial_delay is not None:
-                    time.sleep(self.artificial_delay)
+                    time.sleep(self.artificial_delay)  # only for testing
                 self.conn.commit()
             except sqlite3.OperationalError as e:
                 if "database is locked" in str(e):
                     self.conn.rollback()
-                    if count >= MAX_TRIES:
-                        duration = time.time() - start
-                        raise MSQLiteMaxRetriesError(f"Database is still locked after {count} tries,{duration=}")
-                    new_cursor = None
                     self.retry_count += 1
-                    sleep_time = random.random() * self.backoff
-                    self.backoff *= 1.01  # increase the backoff a little each time we encounter a locked database
-                    log.info(f"Database is locked, retrying {count}/{MAX_TRIES},{sleep_time=}")
-                    time.sleep(sleep_time)
+                    log.info(f"Database is locked, retrying {count=}")
+                    self.conn.close()
+                    self.conn = None
+                    new_cursor = None
+                    time.sleep(random.random())
                 else:
                     # something other than locked database
                     raise
