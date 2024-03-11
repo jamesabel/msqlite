@@ -28,11 +28,14 @@ class MSQLite:
         self.retry_count = 0
         self.backoff = BACKOFF
         self.artificial_delay = None
+        self.conn = None
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
+        if self.conn is not None:
+            self.conn.close()
         if len(self.execution_times) > 0:
             max_execution_time = max(self.execution_times)
         else:
@@ -56,23 +59,23 @@ class MSQLite:
         """
 
         start = time.time()
-        conn = sqlite3.connect(self.db_path, isolation_level="EXCLUSIVE")
-        cursor = conn.cursor()
+        self.conn = sqlite3.connect(self.db_path, isolation_level="EXCLUSIVE")
+        cursor = self.conn.cursor()
 
         count = 0
         new_cursor = None
         while new_cursor is None:
             count += 1
             try:
-                conn.execute("BEGIN EXCLUSIVE TRANSACTION")  # lock the database
+                self.conn.execute("BEGIN EXCLUSIVE TRANSACTION")  # lock the database
                 for statement in statements:
                     new_cursor = cursor.execute(statement)
                 if self.artificial_delay is not None:
                     time.sleep(self.artificial_delay)
-                conn.commit()
+                self.conn.commit()
             except sqlite3.OperationalError as e:
                 if "database is locked" in str(e):
-                    conn.rollback()
+                    self.conn.rollback()
                     if count >= MAX_TRIES:
                         duration = time.time() - start
                         raise MSQLiteMaxRetriesError(f"Database is still locked after {count} tries,{duration=}")
@@ -85,8 +88,6 @@ class MSQLite:
                 else:
                     # something other than locked database
                     raise
-        if new_cursor is None:
-            conn.close()
         self.execution_times.append(time.time() - start)
         return new_cursor
 

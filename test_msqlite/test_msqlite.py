@@ -18,48 +18,49 @@ table_name = "stuff"
 def test_msqlite_single_thread():
     db_path = Path(get_temp_dir(), "test_msqlite.sqlite")
     db_path.unlink(missing_ok=True)
-    db = MSQLite(db_path)
-    # create table
-    db.execute(f"CREATE TABLE {table_name}(name, color, year)")
-    # insert
-    db.execute(f"INSERT INTO {table_name} VALUES ('plate', 'brown', 2020), ('chair', 'black', 2019)")
-    _response = db.execute(f"SELECT * FROM {table_name}")
-    response = list(_response)
-    assert response == [('plate', 'brown', 2020), ('chair', 'black', 2019)]
-    # update table
-    db.execute(f"UPDATE {table_name} SET color='red' WHERE name='plate'")
-    _response = db.execute(f"SELECT * FROM {table_name}")
-    response = list(_response)
-    assert response == [('plate', 'red', 2020), ('chair', 'black', 2019)]
-    max_execution_time = max(db.execution_times)
-    print(f"{max_execution_time=}")
-    assert max_execution_time < 1.0  # 0.016998291015625 has been observed
+    with MSQLite(db_path) as db:
+        # create table
+        db.execute(f"CREATE TABLE {table_name}(name, color, year)")
+        # insert
+        db.execute(f"INSERT INTO {table_name} VALUES ('plate', 'brown', 2020), ('chair', 'black', 2019)")
+        _response = db.execute(f"SELECT * FROM {table_name}")
+        response = list(_response)
+        assert response == [('plate', 'brown', 2020), ('chair', 'black', 2019)]
+        # update table
+        db.execute(f"UPDATE {table_name} SET color='red' WHERE name='plate'")
+        _response = db.execute(f"SELECT * FROM {table_name}")
+        response = list(_response)
+        assert response == [('plate', 'red', 2020), ('chair', 'black', 2019)]
+        max_execution_time = max(db.execution_times)
+        print(f"{max_execution_time=}")
+        assert max_execution_time < 1.0  # 0.016998291015625 has been observed
 
 
 def test_msqlite_single_thread_execute_multiple():
     db_path = Path(get_temp_dir(), "test_msqlite_execute_multiple.sqlite")
     db_path.unlink(missing_ok=True)
-    db = MSQLite(db_path)
-    db.execute(f"CREATE TABLE {table_name}(name, color, year)")
-    statements = []
-    statements.append(f"INSERT INTO {table_name} VALUES ('plate', 'brown', 2020)")
-    statements.append(f"INSERT INTO {table_name} VALUES ('chair', 'black', 2019)")
-    db.execute_multiple(statements)
-    _response = db.execute(f"SELECT * FROM {table_name}")
-    response = list(_response)
-    assert response == [('plate', 'brown', 2020), ('chair', 'black', 2019)]
+    with MSQLite(db_path) as db:
+        db.execute(f"CREATE TABLE {table_name}(name, color, year)")
+        statements = []
+        statements.append(f"INSERT INTO {table_name} VALUES ('plate', 'brown', 2020)")
+        statements.append(f"INSERT INTO {table_name} VALUES ('chair', 'black', 2019)")
+        db.execute_multiple(statements)
+        _response = db.execute(f"SELECT * FROM {table_name}")
+        response = list(_response)
+        assert response == [('plate', 'brown', 2020), ('chair', 'black', 2019)]
 
 
 mp_db_path = Path(get_temp_dir(), "test_msqlite_multi_process.sqlite")
 
 
 def _write_db(value: int):
-    db = MSQLite(mp_db_path)
-    db.set_artificial_delay(BACKOFF)  # delay so we'll get some retries (just for testing)
-    db.execute(f"INSERT INTO {table_name} VALUES ({value}, {time.time()})")
-    if (retry_count := db.retry_count) > 0:
-        print(f"{value=}:{retry_count=}", flush=True)
-    return db.retry_count
+    with MSQLite(mp_db_path) as db:
+        db.set_artificial_delay(BACKOFF)  # delay so we'll get some retries (just for testing)
+        db.execute(f"INSERT INTO {table_name} VALUES ({value}, {time.time()})")
+        if (retry_count := db.retry_count) > 0:
+            print(f"{value=}:{retry_count=}", flush=True)
+        retry_count = db.retry_count
+    return retry_count
 
 
 def test_msqlite_multi_process():
