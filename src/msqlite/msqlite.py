@@ -33,7 +33,10 @@ class MSQLite:
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        max_execution_time = max(self.execution_times)
+        if len(self.execution_times) > 0:
+            max_execution_time = max(self.execution_times)
+        else:
+            max_execution_time = None
         log.info(f"{max_execution_time=}")
         log.info(f"{self.retry_count=}")
 
