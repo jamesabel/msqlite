@@ -48,20 +48,20 @@ class MSQLite:
     A context manager around sqlite3 access that handles multithreading and multiprocessing. Also, automatically creates a table if it does not exist.
     """
 
-    def __init__(self, db_path: Path, table_name: str | None = None, table_columns: dict[str, Type] = None, retry_scale: float = 0.01):
+    def __init__(self, db_path: Path, table_name: str | None = None, schema: dict[str, Type] = None, retry_scale: float = 0.01):
         """
         :param db_path: database file path
         :param table_name: table name
-        :param table_columns: dictionary of column names and types. Example: {"id PRIMARY KEY": int, "name": str, "color": str, "year": int}
+        :param schema: dictionary of column names and types. Example: {"id PRIMARY KEY": int, "name": str, "color": str, "year": int}
         :param retry_scale: scale factor for retrying to connect to the database (1.0 is an average of 1 second)
         """
         self.db_path = db_path
         self.table_name = table_name
         self.retry_scale = retry_scale
-        if table_columns is None:
-            self.table_columns = None
+        if schema is None:
+            self.schema = None
         else:
-            self.table_columns = table_columns
+            self.schema = schema
         self.execution_times = []
         self.retry_count = 0
         self.artificial_delay = None
@@ -73,8 +73,8 @@ class MSQLite:
             try:
                 self.conn = sqlite3.connect(self.db_path, isolation_level="EXCLUSIVE")
                 self.cursor = self.conn.cursor()
-                if self.table_columns is not None:
-                    columns = ",".join([_convert_column_dict_to_sqlite(column_spec, column_type) for column_spec, column_type in self.table_columns.items()])
+                if self.schema is not None:
+                    columns = ",".join([_convert_column_dict_to_sqlite(column_spec, column_type) for column_spec, column_type in self.schema.items()])
                     statement = f"CREATE TABLE IF NOT EXISTS {self.table_name}({columns})"
                     self.cursor.execute(statement)
                 self.conn.execute("BEGIN EXCLUSIVE TRANSACTION")  # lock the database
