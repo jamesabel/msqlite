@@ -45,15 +45,19 @@ def _convert_column_dict_to_sqlite(column_spec: str, column_type: Type) -> str:
 
 class MSQLite:
     """
-    A wrapper around sqlite3 that handles multithreading and multiprocessing.
+    A context manager around sqlite3 access that handles multithreading and multiprocessing. Also, automatically creates a table if it does not exist.
     """
 
-    def __init__(self, db_path: Path, table_name: str | None = None, table_columns: dict[str, Type] = None):
+    def __init__(self, db_path: Path, table_name: str | None = None, table_columns: dict[str, Type] = None, retry_scale: float = 0.01):
         """
         :param db_path: database file path
+        :param table_name: table name
+        :param table_columns: dictionary of column names and types. Example: {"id PRIMARY KEY": int, "name": str, "color": str, "year": int}
+        :param retry_scale: scale factor for retrying to connect to the database (1.0 is an average of 1 second)
         """
         self.db_path = db_path
         self.table_name = table_name
+        self.retry_scale = retry_scale
         if table_columns is None:
             self.table_columns = None
         else:
@@ -79,7 +83,7 @@ class MSQLite:
                     self.conn.rollback()
                     self.retry_count += 1
                     self.conn = None
-                    time.sleep(random.random())
+                    time.sleep(self.retry_scale * 2.0 * random.random())
                 else:
                     # some other exception
                     raise
