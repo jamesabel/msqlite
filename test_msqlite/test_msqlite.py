@@ -17,9 +17,8 @@ table_name = "stuff"
 def test_msqlite_single_thread():
     db_path = Path(get_temp_dir(), "test_msqlite.sqlite")
     db_path.unlink(missing_ok=True)
-    with MSQLite(db_path) as db:
-        # create table
-        db.execute(f"CREATE TABLE {table_name}(name, color, year)")
+    columns = {"name": str, "color": str, "year": int}
+    with MSQLite(db_path, table_name, columns) as db:
         # insert
         db.execute(f"INSERT INTO {table_name} VALUES ('plate', 'brown', 2020), ('chair', 'black', 2019)")
         _response = db.execute(f"SELECT * FROM {table_name}")
@@ -38,34 +37,43 @@ def test_msqlite_single_thread():
 def test_msqlite_single_thread_execute_multiple():
     db_path = Path(get_temp_dir(), "test_msqlite_execute_multiple.sqlite")
     db_path.unlink(missing_ok=True)
-    with MSQLite(db_path) as db:
-        db.execute(f"CREATE TABLE {table_name}(name, color, year)")
-        statements = []
-        statements.append(f"INSERT INTO {table_name} VALUES ('plate', 'brown', 2020)")
-        statements.append(f"INSERT INTO {table_name} VALUES ('chair', 'black', 2019)")
-        db.execute_multiple(statements)
+    columns = {"name": str, "color": str, "ts UNIQUE": int}
+    with MSQLite(db_path, table_name, columns) as db:
+        time_a = int(round(time.time()))
+        db.execute(f"INSERT INTO {table_name} VALUES ('plate', 'brown', {time_a})")
+        time.sleep(2)
+        time_b = int(round(time.time()))
+        db.execute(f"INSERT INTO {table_name} VALUES ('chair', 'black', {time_b})")
         _response = db.execute(f"SELECT * FROM {table_name}")
         response = list(_response)
-        assert response == [('plate', 'brown', 2020), ('chair', 'black', 2019)]
+        assert response == [('plate', 'brown', time_a), ('chair', 'black', time_b)]
+
+
+def test_msqlite_do_nothing():
+    db_path = Path(get_temp_dir(), "test_msqlite_do_nothing")
+    db_path.unlink(missing_ok=True)
+    columns = {"name": str, "color": str, "year": int}
+    with MSQLite(db_path, table_name, columns) as db:
+        # make sure we can exit the context manager without doing anything
+        assert len(db.execution_times) == 0
 
 
 mp_db_path = Path(get_temp_dir(), "test_msqlite_multi_process.sqlite")
 
 
 def _write_db(value: int):
-    with MSQLite(mp_db_path) as db:
+    columns = {"value": int, "timestamp": float}
+    with MSQLite(mp_db_path, table_name, columns) as db:
         db.set_artificial_delay(0.1)  # delay so we'll get some retries (just for testing)
         db.execute(f"INSERT INTO {table_name} VALUES ({value}, {time.time()})")
         if (retry_count := db.retry_count) > 0:
-            print(f"{value=}:{retry_count=}", flush=True)
+            print(f"{value=}:{retry_count=},{db.execution_times=}", flush=True)
         retry_count = db.retry_count
     return retry_count
 
 
 def test_msqlite_multi_process():
     mp_db_path.unlink(missing_ok=True)
-    db = MSQLite(mp_db_path)
-    db.execute(f"CREATE TABLE {table_name}(thing INTEGER PRIMARY KEY, ts NUMERIC)")
     processes = 200  # enough to have at least several retries
     with Pool(16) as pool:
         print(f"{pool._processes=}")
