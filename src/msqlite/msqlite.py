@@ -23,6 +23,12 @@ type_to_sqlite_type = {
 
 
 def _convert_column_dict_to_sqlite(column_spec: str, column_type: Type) -> str:
+    """
+    Convert a column specification to a SQLite column specification.
+    :param column_spec: column name and optional constraints. Example: "id PRIMARY KEY"
+    :param column_type: column type (Python types such as int, float, str, etc.). Example: int
+    :return: column specification string for SQLite
+    """
     column_spec_parts = column_spec.split()
     assert len(column_spec_parts) > 0  # at least the column name
     column_name = column_spec_parts[0]
@@ -102,14 +108,14 @@ class MSQLite:
         Execute statements on a sqlite3 database, with an auto-commit and a retry mechanism to handle multiple threads/processes.
 
         :param statement: SQL statement to execute
-        :return: sqlite3.Cursor
+        :return: sqlite3.Cursor after execute statement
         """
 
         start = time.time()
         assert self.conn is not None
-        new_cursor = self.cursor.execute(statement)
         if self.artificial_delay is not None:
             time.sleep(self.artificial_delay)  # only for testing
+        new_cursor = self.cursor.execute(statement)
         self.execution_times.append(time.time() - start)
         return new_cursor
 
