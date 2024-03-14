@@ -9,7 +9,7 @@ log = getLogger()
 
 
 class MSQLiteMaxRetriesError(sqlite3.OperationalError):
-    ...
+    pass
 
 
 type_to_sqlite_type = {
@@ -32,12 +32,12 @@ def _convert_column_dict_to_sqlite(column_spec: str, column_type: Type) -> str:
     column_spec_parts = column_spec.split()
     assert len(column_spec_parts) > 0  # at least the column name
     column_name = column_spec_parts[0]
-    column_type = type_to_sqlite_type[column_type]
+    column_type_string = type_to_sqlite_type[column_type]
     if len(column_spec_parts) > 1:
         constraints = column_spec_parts[1:]
     else:
         constraints = []
-    spec_components = [column_name, column_type]
+    spec_components = [column_name, column_type_string]
     spec_components.extend(constraints)
     spec = " ".join(spec_components)
     return spec
@@ -48,7 +48,7 @@ class MSQLite:
     A context manager around sqlite3 access that handles multithreading and multiprocessing. Also, automatically creates a table if it does not exist.
     """
 
-    def __init__(self, db_path: Path, table_name: str | None = None, schema: dict[str, Type] = None, retry_scale: float = 0.01):
+    def __init__(self, db_path: Path, table_name: str, schema: dict[str, Type] | None = None, retry_scale: float = 0.01, retry_limit: int | None = None):
         """
         :param db_path: database file path
         :param table_name: table name
@@ -58,18 +58,21 @@ class MSQLite:
         self.db_path = db_path
         self.table_name = table_name
         self.retry_scale = retry_scale
+        self.retry_limit = retry_limit
         if schema is None:
             self.schema = None
         else:
             self.schema = schema
-        self.execution_times = []
+        self.execution_times = []  # type: list[float]
         self.retry_count = 0
-        self.artificial_delay = None
+        self.artificial_delay = None  # type: float | None
         self.conn = None  # type: sqlite3.Connection | None
         self.cursor = None  # type: sqlite3.Cursor | None
 
     def __enter__(self):
         while self.conn is None:
+            if self.retry_limit is not None and self.retry_count > self.retry_limit:
+                raise MSQLiteMaxRetriesError(f"Exceeded maximum retries of {self.retry_limit}")
             try:
                 self.conn = sqlite3.connect(self.db_path, isolation_level="EXCLUSIVE")
                 self.cursor = self.conn.cursor()
@@ -119,8 +122,7 @@ class MSQLite:
         assert self.conn is not None
         if self.artificial_delay is not None:
             time.sleep(self.artificial_delay)  # only for testing
+        assert self.cursor is not None
         new_cursor = self.cursor.execute(statement)
         self.execution_times.append(time.time() - start)
         return new_cursor
-
-

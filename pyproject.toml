@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "msqlite"
-version = "0.1.1"
+version = "0.2.0"
 description = "Execute simple SQLite statements that are multithreaded/multiprocess safe"
 readme = "README.md"
 authors = [{ name = "James Abel", email = "j@abel.co" }]
@@ -20,3 +20,6 @@ dependencies = []
 
 [project.urls]
 Source = "https://github.com/jamesabel/msqlite"
+
+[tool.black]
+line-length = 192

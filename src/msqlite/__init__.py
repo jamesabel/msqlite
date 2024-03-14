@@ -1,1 +1,1 @@
-from .msqlite import MSQLite
+from .msqlite import MSQLite, MSQLiteMaxRetriesError

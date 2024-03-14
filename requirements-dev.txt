@@ -1,5 +1,11 @@
+# distribution/packaging
 build
 twine
+# testing
 pytest
 pytest-xdist
 pytest-pycharm
+# linters
+flake8
+black
+mypy
