@@ -2,9 +2,11 @@
 build
 twine
 # testing
+coverage
 pytest
 pytest-xdist
 pytest-pycharm
+pytest-cov
 # linters
 flake8
 black
