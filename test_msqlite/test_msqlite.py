@@ -3,13 +3,7 @@ from multiprocessing import Pool
 import time
 
 from src.msqlite import MSQLite
-
-
-def get_temp_dir() -> Path:
-    temp_dir = Path("temp")
-    temp_dir.mkdir(exist_ok=True)
-    return temp_dir
-
+from test_msqlite.paths import get_temp_dir
 
 table_name = "stuff"
 
@@ -23,12 +17,12 @@ def test_msqlite_single_thread():
         db.execute(f"INSERT INTO {table_name} VALUES ('plate', 'brown', 2020), ('chair', 'black', 2019)")
         _response = db.execute(f"SELECT * FROM {table_name}")
         response = list(_response)
-        assert response == [('plate', 'brown', 2020), ('chair', 'black', 2019)]
+        assert response == [("plate", "brown", 2020), ("chair", "black", 2019)]
         # update table
         db.execute(f"UPDATE {table_name} SET color='red' WHERE name='plate'")
         _response = db.execute(f"SELECT * FROM {table_name}")
         response = list(_response)
-        assert response == [('plate', 'red', 2020), ('chair', 'black', 2019)]
+        assert response == [("plate", "red", 2020), ("chair", "black", 2019)]
         max_execution_time = max(db.execution_times)
         print(f"{max_execution_time=}")
         assert max_execution_time < 1.0  # 0.016998291015625 has been observed
@@ -46,7 +40,7 @@ def test_msqlite_single_thread_execute_multiple():
         db.execute(f"INSERT INTO {table_name} VALUES ('chair', 'black', {time_b})")
         _response = db.execute(f"SELECT * FROM {table_name}")
         response = list(_response)
-        assert response == [('plate', 'brown', time_a), ('chair', 'black', time_b)]
+        assert response == [("plate", "brown", time_a), ("chair", "black", time_b)]
 
 
 def test_msqlite_do_nothing():
