@@ -4,6 +4,7 @@ import time
 import random
 from pathlib import Path
 from typing import Type
+import json
 
 log = getLogger()
 
@@ -14,11 +15,19 @@ class MSQLiteMaxRetriesError(sqlite3.OperationalError):
 
 type_to_sqlite_type = {
     int: "INTEGER",
+    "int": "INTEGER",
     float: "REAL",
+    "float": "REAL",
     str: "TEXT",
+    "str": "TEXT",
     bytes: "BLOB",
+    "bytes": "BLOB",
     bool: "INTEGER",
+    "bool": "INTEGER",
+    json: "JSON",
+    "JSON": "JSON",
     type(None): "NULL",
+    "None": "NULL"
 }
 
 
@@ -32,7 +41,8 @@ def _convert_column_dict_to_sqlite(column_spec: str, column_type: Type) -> str:
     column_spec_parts = column_spec.split()
     assert len(column_spec_parts) > 0  # at least the column name
     column_name = column_spec_parts[0]
-    column_type_string = type_to_sqlite_type[column_type]
+    if (column_type_string := type_to_sqlite_type.get(column_type)) is None:
+        raise ValueError(f"{column_type} (type={type(column_type)}) is not a supported SQLite column type (see msqlite.type_to_sqlite_type for supported types)")
     if len(column_spec_parts) > 1:
         constraints = column_spec_parts[1:]
     else:
