@@ -27,7 +27,7 @@ type_to_sqlite_type = {
     json: "JSON",
     "JSON": "JSON",
     type(None): "NULL",
-    "None": "NULL"
+    "None": "NULL",
 }
 
 

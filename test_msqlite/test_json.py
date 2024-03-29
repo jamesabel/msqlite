@@ -11,8 +11,7 @@ table_name = "stuff"
 
 
 def test_msqlite_json():
-    expected_results = [('Jenny', '{"name": "Jenny", "phone": "867-5309", "year": 1981}'),
-                        ('Wilson', '{"name": "Wilson", "phone": "634-5789", "year": 1966}')]
+    expected_results = [("Jenny", '{"name": "Jenny", "phone": "867-5309", "year": 1981}'), ("Wilson", '{"name": "Wilson", "phone": "634-5789", "year": 1966}')]
 
     db_path = Path(get_temp_dir(), "test_msqlite_json.sqlite")
     db_path.unlink(missing_ok=True)
