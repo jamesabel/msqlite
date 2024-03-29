@@ -59,10 +59,7 @@ class MSQLite:
         self.table_name = table_name
         self.retry_scale = retry_scale
         self.retry_limit = retry_limit
-        if schema is None:
-            self.schema = None
-        else:
-            self.schema = schema
+        self.schema = schema
         self.execution_times = []  # type: list[float]
         self.retry_count = 0
         self.artificial_delay = None  # type: float | None
