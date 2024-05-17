@@ -3,7 +3,7 @@ from logging import getLogger
 import time
 import random
 from pathlib import Path
-from typing import Type
+from typing import Type, Dict, Iterable
 import json
 
 log = getLogger()
@@ -117,11 +117,12 @@ class MSQLite:
         """
         self.artificial_delay = delay
 
-    def execute(self, statement: str) -> sqlite3.Cursor:
+    def execute(self, statement: str, parameters: Dict | Iterable | None = None) -> sqlite3.Cursor:
         """
         Execute statements on a sqlite3 database, with an auto-commit and a retry mechanism to handle multiple threads/processes.
 
         :param statement: SQL statement to execute
+        :param parameters: parameters for the SQL statement
         :return: sqlite3.Cursor after execute statement
         """
 
@@ -130,6 +131,9 @@ class MSQLite:
         if self.artificial_delay is not None:
             time.sleep(self.artificial_delay)  # only for testing
         assert self.cursor is not None
-        new_cursor = self.cursor.execute(statement)
+        if parameters is None:
+            new_cursor = self.cursor.execute(statement)
+        else:
+            new_cursor = self.cursor.execute(statement, parameters)
         self.execution_times.append(time.time() - start)
         return new_cursor
