@@ -1,7 +1,9 @@
 import time
 from pathlib import Path
 
-from src.msqlite import MSQLite
+from msqlite import MSQLite
+
+from test_msqlite.paths import get_temp_dir
 
 
 def test_example():
@@ -10,7 +12,7 @@ def test_example():
     """
     table_name = "example"
     schema = {"id PRIMARY KEY": int, "name": str, "color": str, "year": int}
-    db_path = Path("temp", "example.sqlite")
+    db_path = Path(get_temp_dir(), "example.sqlite")
     db_path.parent.mkdir(exist_ok=True)
 
     # Write and read data.
