@@ -2,6 +2,7 @@
 build
 twine
 # testing
+beartype
 coverage
 pytest
 pytest-xdist

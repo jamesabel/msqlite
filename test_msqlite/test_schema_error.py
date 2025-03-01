@@ -4,7 +4,7 @@ import pytest
 
 from test_msqlite.paths import get_temp_dir
 
-from src.msqlite import MSQLite
+from msqlite import MSQLite
 
 table_name = "stuff"
 
