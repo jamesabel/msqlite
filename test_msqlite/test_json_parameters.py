@@ -3,7 +3,7 @@ from pprint import pprint
 
 import json
 
-from src.msqlite import MSQLite
+from msqlite import MSQLite
 
 from test_msqlite.paths import get_temp_dir
 

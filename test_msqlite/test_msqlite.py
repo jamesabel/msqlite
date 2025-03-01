@@ -2,7 +2,7 @@ from pathlib import Path
 from multiprocessing import Pool
 import time
 
-from src.msqlite import MSQLite
+from msqlite import MSQLite
 from test_msqlite.paths import get_temp_dir
 
 table_name = "stuff"
@@ -44,7 +44,7 @@ def test_msqlite_single_thread_execute_multiple():
 
 
 def test_msqlite_do_nothing():
-    db_path = Path(get_temp_dir(), "test_msqlite_do_nothing")
+    db_path = Path(get_temp_dir(), "test_msqlite_do_nothing.db")
     db_path.unlink(missing_ok=True)
     schema = {"name": str, "color": str, "year": int}
     with MSQLite(db_path, table_name, schema) as db:
