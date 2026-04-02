@@ -3,7 +3,6 @@ from pathlib import Path
 from msqlite import MSQLite
 from test_msqlite.paths import get_temp_dir
 
-
 table_name = "test"
 
 

@@ -4,7 +4,8 @@ import time
 import random
 import re
 from pathlib import Path
-from typing import Type, Any, Mapping, Sequence
+from typing import Any
+from collections.abc import Mapping, Sequence
 import json
 
 log = getLogger()
@@ -83,7 +84,7 @@ class MSQLite:
     A context manager around sqlite3 access that handles multithreading and multiprocessing. Also, automatically creates a table if it does not exist.
     """
 
-    def __init__(self, db_path: Path, table_name: str, schema: dict[str, Type] | None = None, indexes: list[str] | None = None, *, retry_scale: float = 0.01, retry_limit: int | None = None):
+    def __init__(self, db_path: Path, table_name: str, schema: dict[str, type] | None = None, indexes: list[str] | None = None, *, retry_scale: float = 0.01, retry_limit: int | None = None):
         """
         :param db_path: database file path
         :param table_name: table name

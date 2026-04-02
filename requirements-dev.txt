@@ -1,6 +1,3 @@
-# distribution/packaging
-build
-twine
 # testing
 beartype
 coverage
