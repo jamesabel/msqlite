@@ -4,6 +4,7 @@ from msqlite import MSQLite, MSQLiteNoSchemaException
 
 from test_msqlite.paths import get_temp_dir
 
+
 def test_no_schema():
     db_path = get_temp_dir() / "test_no_schema.sqlite"
     with pytest.raises(MSQLiteNoSchemaException):

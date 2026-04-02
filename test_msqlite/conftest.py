@@ -1,3 +1,4 @@
-from beartype.claw import beartype_all
+from beartype.claw import beartype_package
 
-beartype_all()
+beartype_package("msqlite")
+beartype_package("test_msqlite")
