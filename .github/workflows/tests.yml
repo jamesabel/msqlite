@@ -20,4 +20,24 @@ jobs:
           allow-prereleases: true
       - run: pip install -r requirements-dev.txt
       - run: pip install -e .
-      - run: pytest
+      - name: Run tests with coverage
+        if: matrix.python-version == '3.14'
+        run: |
+          pytest --cov=msqlite --cov-report=term | tee coverage.txt
+          COVERAGE=$(grep "^TOTAL" coverage.txt | awk '{print $NF}' | tr -d '%')
+          echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
+      - name: Run tests
+        if: matrix.python-version != '3.14'
+        run: pytest
+      - name: Update coverage badge
+        if: matrix.python-version == '3.14' && github.ref == 'refs/heads/main'
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GIST_TOKEN }}
+          gistID: 6d52e73f56390c801b04efe41af174d4
+          filename: coverage.json
+          label: coverage
+          message: ${{ env.COVERAGE }}%
+          valColorRange: ${{ env.COVERAGE }}
+          minColorRange: 50
+          maxColorRange: 100

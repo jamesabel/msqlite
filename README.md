@@ -1,3 +1,6 @@
+![Tests](https://github.com/jamesabel/msqlite/actions/workflows/tests.yml/badge.svg)
+![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/jamesabel/6d52e73f56390c801b04efe41af174d4/raw/coverage.json)
+
 # msqlite
 
 Multi-threaded/multi-process support on top of SQLite. The intent is to ensure a SQL statement
