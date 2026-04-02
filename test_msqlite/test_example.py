@@ -19,7 +19,7 @@ def test_example():
     with MSQLite(db_path, table_name, schema) as db:
         now = time.monotonic_ns()  # some index value
         # insert some data
-        db.execute(f"INSERT INTO {table_name} VALUES ({now}, 'plate', 'red', 2020), ({now + 1}, 'chair', 'green', 2019)")
+        db.execute(f"INSERT INTO {table_name} VALUES (?, ?, ?, ?), (?, ?, ?, ?)", (now, "plate", "red", 2020, now + 1, "chair", "green", 2019))
         # read the data back out
         response = db.execute(f"SELECT * FROM {table_name}")
         for row in response:
