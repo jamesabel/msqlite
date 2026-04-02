@@ -1,11 +1,14 @@
 from pathlib import Path
 import time
 
+import pytest
+
 from msqlite import MSQLite
 
 from test_msqlite.paths import get_temp_dir
 
 
+@pytest.mark.slow
 def test_artificial_delay():
 
     table_name = "example"

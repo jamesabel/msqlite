@@ -21,9 +21,7 @@ def test_msqlite_json():
         for d in datum:
             d_json = json.dumps(d)
             name = d["name"]
-            insert_string = f"INSERT INTO {table_name} VALUES ('{name}', '{d_json}')"
-            print(insert_string)
-            db.execute(insert_string)
+            db.execute(f"INSERT INTO {table_name} VALUES (?, ?)", (name, d_json))
         _response = db.execute(f"SELECT * FROM {table_name}")
         response = list(_response)
         pprint(response)
