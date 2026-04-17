@@ -1,5 +1,6 @@
 ![Tests](https://github.com/jamesabel/msqlite/actions/workflows/tests.yml/badge.svg)
 ![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/jamesabel/073de6201c5dc8c7d26d464af31c2a4b/raw/coverage.json)
+![Publish to PyPI](https://github.com/jamesabel/msqlite/actions/workflows/publish.yml/badge.svg)
 
 # msqlite
 
