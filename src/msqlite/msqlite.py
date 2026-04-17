@@ -137,8 +137,11 @@ class MSQLite:
                 self.conn.rollback()
             self.conn.close()
             self.conn = None
-        log.info(f"{self.max_execution_time=}")
-        log.info(f"{self.retry_count=}")
+        log.debug(f"{self.max_execution_time=}")
+        if self.retry_count > 0:
+            log.info(f"{self.retry_count=}")
+        else:
+            log.debug(f"{self.retry_count=}")
 
     def create_table(self):
         """
