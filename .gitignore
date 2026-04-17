@@ -160,3 +160,4 @@ cython_debug/
 .idea/
 temp/
 .claude/settings.local.json
+run_claude.bat
