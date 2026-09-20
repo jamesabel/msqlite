@@ -38,7 +38,7 @@ single-table `MSQLite` helper, both on one retry implementation. Existing
 - Tests for readers during writes under WAL (threads and processes), the deadline error,
   statement-level and commit retry, migrations and the deprecation shims.
 - `scripts/benchmark.py` and a benchmark table in the README.
-- Python 3.15 in the test matrix; ruff (lint and format) and strict mypy in CI.
+- Python 3.15 in the test matrix (the tests run without beartype on a Python it does not support yet); ruff (lint and format) and strict mypy in CI.
 
 ### Changed
 

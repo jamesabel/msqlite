@@ -22,6 +22,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false  # a pre-release failure must not cancel the stable runs
       matrix:
         # Policy: test on the minimum supported version, the latest stable release and the
         # upcoming pre-release. Update when a new Python is released or a pre-release appears.
