@@ -130,8 +130,8 @@ them. WAL creates `-wal` and `-shm` files next to the database.
 
 **When a rollback journal is still right.** WAL needs shared memory between the processes that
 open the file, so it does not work over network filesystems (NFS, SMB shares). If the database
-lives on one of those, or if there is a single writer and readers can tolerate waiting, keep the
-default rollback journal: `Database(path, wal=False)`. `MSQLite` leaves the journal mode alone
+lives on one of those, or if there is a single writer and readers can tolerate waiting, use a rollback journal:
+`Database(path, wal=False)` (which leaves an existing file's journal mode untouched). `MSQLite` leaves it alone
 unless asked (`wal=True`), so existing databases see no change.
 
 ## Configuration
