@@ -4,17 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "msqlite"
-version = "0.7.2"
-description = "Execute simple SQLite statements that are multithreaded/multiprocess safe"
+version = "1.0.0"
+description = "SQLite access that is safe across threads and processes: bounded, retried locking with WAL readers"
 readme = "README.md"
 authors = [{ name = "James Abel", email = "j@abel.co" }]
 license = { file="LICENSE" }
-keywords = ["sqlite", "multithread", "multiprocess"]
+keywords = ["sqlite", "multithread", "multiprocess", "wal", "concurrency"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
+  "Typing :: Typed",
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
 ]
@@ -23,6 +25,23 @@ dependencies = []
 
 [project.urls]
 Source = "https://github.com/jamesabel/msqlite"
+Changelog = "https://github.com/jamesabel/msqlite/blob/main/CHANGELOG.md"
 
-[tool.black]
+[tool.ruff]
 line-length = 192
+target-version = "py312"
+
+[tool.ruff.format]
+exclude = ["test_msqlite/test_indexes.py"]  # pre-existing human-owned test kept byte-for-byte
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "PYI"]
+ignore = ["E501"]  # line length is the formatter's job
+
+[tool.ruff.lint.per-file-ignores]
+"test_msqlite/*" = ["I001", "SIM117", "B018", "RUF046"]  # existing tests keep their import order and style; nested with-blocks and bare expressions are deliberate
+
+[tool.mypy]
+files = ["src/msqlite"]
+python_version = "3.12"
+strict = true

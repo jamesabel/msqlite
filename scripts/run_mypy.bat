@@ -1,9 +1,6 @@
 pushd .
 cd ..
-call venv\Scripts\activate.bat
-cd src
-mypy -m msqlite
-cd ..
-mypy -m test_msqlite
+call venv\Scriptsctivate.bat
+mypy
 call deactivate
 popd

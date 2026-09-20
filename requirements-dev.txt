@@ -6,6 +6,5 @@ pytest-xdist
 pytest-pycharm
 pytest-cov
 # linters
-flake8
-black
+ruff
 mypy
