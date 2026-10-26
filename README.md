@@ -197,16 +197,16 @@ Write latency for one single-row insert per transaction while N processes conten
 file. Each process does 20 writes; the table shows the latency distribution of the `with` block
 (lock acquisition, the insert and the commit) and the aggregate throughput.
 
-Measured on Windows-11-10.0.26200-SP0, Python 3.14.3, SQLite 3.50.4 (a desktop with an NVMe SSD; numbers on CI runners or laptops will differ):
+Measured on Windows-11-10.0.26300-SP0, Python 3.14.9, SQLite 3.50.4 (a desktop with an NVMe SSD; numbers on CI runners or laptops will differ):
 
 | Mode | Processes | Median (ms) | p95 (ms) | Max (ms) | Writes/s |
 |------|----------:|------------:|---------:|---------:|---------:|
-| Database.write() (WAL, IMMEDIATE, persistent connection) | 1 | 0.6 | 1.1 | 3 | 1160 |
-| Database.write() (WAL, IMMEDIATE, persistent connection) | 10 | 0.6 | 1.1 | 256 | 747 |
-| Database.write() (WAL, IMMEDIATE, persistent connection) | 100 | 0.6 | 35.2 | 5787 | 345 |
-| MSQLite (rollback journal, EXCLUSIVE, connection per access) | 1 | 2.3 | 2.5 | 3 | 419 |
-| MSQLite (rollback journal, EXCLUSIVE, connection per access) | 10 | 2.3 | 49.0 | 814 | 233 |
-| MSQLite (rollback journal, EXCLUSIVE, connection per access) | 100 | 2.4 | 1503.9 | 17106 | 117 |
+| Database.write() (WAL, IMMEDIATE, persistent connection) | 1 | 0.6 | 0.9 | 4 | 1188 |
+| Database.write() (WAL, IMMEDIATE, persistent connection) | 10 | 0.6 | 1.2 | 216 | 875 |
+| Database.write() (WAL, IMMEDIATE, persistent connection) | 100 | 0.6 | 28.7 | 5535 | 360 |
+| MSQLite (rollback journal, EXCLUSIVE, connection per access) | 1 | 2.8 | 3.1 | 4 | 353 |
+| MSQLite (rollback journal, EXCLUSIVE, connection per access) | 10 | 2.3 | 92.5 | 1139 | 169 |
+| MSQLite (rollback journal, EXCLUSIVE, connection per access) | 100 | 2.3 | 519.4 | 15408 | 129 |
 
 Per-write latency is dominated by the commit's fsync and, under contention, by waiting for the
 other writers: with 100 processes each write queues behind up to 99 others. The rollback-journal
