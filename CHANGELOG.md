@@ -4,6 +4,13 @@ All notable changes to msqlite are recorded here. The project follows
 [Semantic Versioning](https://semver.org/): breaking changes bump the major version, and a
 signature that changes keeps a deprecation shim for at least one minor version.
 
+## [Unreleased]
+
+### Changed
+
+- Test matrix moved to Python 3.12 (minimum), 3.15 (latest stable) and 3.16 (pre-release); lint, type
+  checking and the coverage badge run on 3.15. Added the 3.16 classifier.
+
 ## [1.0.1] - 2026-10-26
 
 ### Fixed

@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: "3.15"
       - run: pip install -r requirements-dev.txt
       - run: ruff check src test_msqlite scripts
       - run: ruff format --check src test_msqlite scripts
@@ -26,7 +26,7 @@ jobs:
       matrix:
         # Policy: test on the minimum supported version, the latest stable release and the
         # upcoming pre-release. Update when a new Python is released or a pre-release appears.
-        python-version: ["3.12", "3.14", "3.15"]
+        python-version: ["3.12", "3.15", "3.16"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -36,16 +36,16 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: pip install -e .
       - name: Run tests with coverage
-        if: matrix.python-version == '3.14'
+        if: matrix.python-version == '3.15'
         run: |
           pytest --cov=msqlite --cov-report=term | tee coverage.txt
           COVERAGE=$(grep "^TOTAL" coverage.txt | awk '{print $NF}' | tr -d '%')
           echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
       - name: Run tests
-        if: matrix.python-version != '3.14'
+        if: matrix.python-version != '3.15'
         run: pytest
       - name: Update coverage badge
-        if: matrix.python-version == '3.14' && github.ref == 'refs/heads/main'
+        if: matrix.python-version == '3.15' && github.ref == 'refs/heads/main'
         uses: schneegans/dynamic-badges-action@v1.7.0
         with:
           auth: ${{ secrets.GIST_TOKEN }}
