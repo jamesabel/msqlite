@@ -146,13 +146,17 @@ Database(
     retry_scale=0.01,       # base backoff unit in seconds
     retry_cap_s=1.0,        # upper bound of one backoff sleep
     busy_timeout_s=5.0,     # SQLite's own busy timeout per attempt
-    pragmas=("synchronous=FULL",),
-    on_open=lambda conn: conn.execute("PRAGMA foreign_keys=ON"),
-    on_retry=lambda attempt, elapsed_s, error: log.warning("retry %d after %.2fs: %s", attempt, elapsed_s, error),
-    row_factory=sqlite3.Row,
     persistent=True,        # one connection per thread, reused; False opens one per transaction
+    # The rest default to off; these are examples.
+    pragmas=("synchronous=FULL",),                                  # applied to every new connection
+    on_open=lambda conn: conn.execute("PRAGMA foreign_keys=ON"),    # after the pragmas
+    on_retry=lambda attempt, elapsed_s, error: log.warning("retry %d after %.2fs: %s", attempt, elapsed_s, error),
+    row_factory=sqlite3.Row,                                        # applied to every cursor
 )
 ```
+
+All arguments after the path are keyword-only. A pragma may be written with or without the
+`PRAGMA` prefix; one containing a `;` is rejected.
 
 `MSQLite(path, table, schema, indexes, *, retry_scale, retry_limit, timeout_s, retry_cap_s,
 busy_timeout_s, wal, mode, on_retry)` takes the same knobs. Its defaults keep the historical
@@ -160,16 +164,32 @@ behaviour: rollback journal, `EXCLUSIVE`, no deadline.
 
 ### Migrations
 
-`db.migrate(steps)` applies `(version, sql_script)` pairs keyed on `PRAGMA user_version`.
-Steps at or below the current version are skipped; the rest run in one write transaction, so a
-failing step rolls everything back and leaves `user_version` untouched. Projects with their own
-migrations table can ignore it.
+`db.migrate(steps)` applies `(version, sql_script)` pairs keyed on `PRAGMA user_version` and
+returns the resulting version. Versions must be positive and strictly increasing (`ValueError`
+otherwise). Steps at or below the current version are skipped; the rest run in one write
+transaction, so a failing step rolls everything back and leaves `user_version` untouched.
+Projects with their own migrations table can ignore it.
 
 ### Observability
 
 `db.stats` (and `MSQLite.stats`) is a `Stats` dataclass with `executions`, `retries`,
 `max_execution_s` and `max_wait_s`. `on_retry(attempt, elapsed_s, error)` is called before each
 backoff sleep. Log records go to the `msqlite.msqlite` logger.
+
+### Errors
+
+| Exception | Raised when |
+|-----------|-------------|
+| `MSQLiteTimeoutError(elapsed_s, attempts)` | the total lock wait in one transaction exceeds `timeout_s` |
+| `MSQLiteMaxRetriesError(elapsed_s, attempts, retry_limit)` | the retries in one transaction exceed `retry_limit`; a subclass of `MSQLiteTimeoutError` |
+| `MSQLiteNoSchemaException(table_name)` | `MSQLite.execute` hits "no such table" and no `schema` was given |
+| `sqlite3.OperationalError` with `SQLITE_BUSY_SNAPSHOT` | a `read()` transaction tried to write after another writer committed; raised at once, never retried |
+| `ValueError` | an invalid table or index name, pragma, migration version order, or an unsupported schema type |
+
+`MSQLiteTimeoutError` subclasses `sqlite3.OperationalError`, so existing `except
+sqlite3.OperationalError` handlers keep working. The transaction is rolled back and, for
+`MSQLite`, the connection closed before the error reaches the caller. Any other
+`sqlite3` error passes through untouched.
 
 ## Benchmark
 
@@ -212,7 +232,7 @@ pip install -e .
 pytest                         # includes a 200-process contention test; -m "not slow" skips the slowest
 ruff format src test_msqlite scripts && ruff check src test_msqlite scripts
 mypy                           # strict, configured in pyproject.toml
-python -m build                # or: uv build
+pip install build && python -m build   # or: uv build
 ```
 
 Tests run on the minimum supported Python, the latest stable release and the upcoming
