@@ -1,6 +1,4 @@
-pushd .
-cd ..
-call venv\Scriptsctivate.bat
-mypy
-call deactivate
-popd
+pushd .
+cd ..
+uv run mypy
+popd

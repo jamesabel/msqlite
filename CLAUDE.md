@@ -8,28 +8,34 @@ msqlite is a zero-dependency Python library that wraps SQLite with multi-threade
 
 ## Commands
 
+The project is managed with uv: dev dependencies are the `dev` group in `pyproject.toml`, pinned by `uv.lock`.
+Install with `uv sync --no-build` (wheels only; never build a dependency from source) and run tools with `uv run`.
+
 ```bash
 # Run all tests
-pytest
+uv run pytest
 
 # Run a single test file
-pytest test_msqlite/test_example.py
+uv run pytest test_msqlite/test_example.py
 
 # Run a single test function
-pytest test_msqlite/test_msqlite.py::test_msqlite_single_thread
+uv run pytest test_msqlite/test_msqlite.py::test_msqlite_single_thread
 
 # Run tests with coverage
-pytest --cov-report=html --cov-report=xml:cov/coverage.xml --cov src/msqlite
+uv run pytest --cov-report=html --cov-report=xml:cov/coverage.xml --cov src/msqlite
 
 # Format and lint (ruff, line-length 192, configured in pyproject.toml)
-ruff format src test_msqlite scripts
-ruff check src test_msqlite scripts
+uv run ruff format src test_msqlite scripts
+uv run ruff check src test_msqlite scripts
 
 # Type check (mypy strict, files configured in pyproject.toml)
-mypy
+uv run mypy
 
 # Write-latency benchmark (prints the README table)
-python scripts/benchmark.py --processes 1 10 100 --writes 20
+uv run python scripts/benchmark.py --processes 1 10 100 --writes 20
+
+# Build the sdist and wheel (uv_build backend)
+uv build
 ```
 
 ## Architecture
@@ -50,4 +56,4 @@ Tests are in `test_msqlite/` with `conftest.py` enabling beartype runtime type c
 
 ## Release policy
 
-Semantic versioning with `CHANGELOG.md`; a changed signature keeps a deprecation shim for one minor version. Python versions tested: minimum supported (3.12), latest stable (3.14) and the pre-release (3.15), with the policy noted next to the matrix in `.github/workflows/tests.yml`. Publishing runs from the GitHub release workflow via trusted publishing; never upload to PyPI by hand.
+Semantic versioning with `CHANGELOG.md`; a changed signature keeps a deprecation shim for one minor version. Python versions tested: minimum supported (3.12), latest stable (3.15) and the pre-release (3.16), with the policy noted next to the matrix in `.github/workflows/tests.yml`. Publishing runs from the GitHub release workflow (`uv build` then `uv publish` with trusted publishing); never upload to PyPI by hand.
