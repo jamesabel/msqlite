@@ -10,7 +10,7 @@ import pytest
 from beartype.roar import BeartypeCallHintParamViolation
 
 from msqlite import Database, MSQLiteMaxRetriesError, MSQLiteTimeoutError, Stats
-from msqlite.msqlite import _close_dead_thread_connection
+from msqlite._connections import close_dead_thread_connection
 from test_msqlite.paths import get_temp_dir
 
 
@@ -254,7 +254,7 @@ def test_persistent_connection_is_closed_when_its_thread_ends():
         gc.collect()  # CPython frees the slots as each thread exits; this covers interpreters that defer it
 
         assert len(opened) == 51  # the main thread's connection plus one per worker
-        assert len(db._slots) == 1  # only the main thread's slot survives
+        assert len(db._connections._slots) == 1  # only the main thread's slot survives
         for conn in opened[1:]:  # the workers' connections are closed ...
             with pytest.raises(sqlite3.ProgrammingError):
                 conn.execute("SELECT 1")
@@ -289,9 +289,9 @@ def test_close_after_threads_ended_is_harmless():
 def test_dead_thread_finalizer_leaves_a_forked_parents_connection_alone():
     """The finalizer closes only connections opened in this process; one inherited across a fork is the parent's."""
     conn = sqlite3.connect(":memory:", check_same_thread=False)
-    _close_dead_thread_connection(conn, os.getpid() + 1)  # looks like the parent's connection in a forked child
+    close_dead_thread_connection(conn, os.getpid() + 1)  # looks like the parent's connection in a forked child
     conn.execute("SELECT 1")  # still open
-    _close_dead_thread_connection(conn, os.getpid())
+    close_dead_thread_connection(conn, os.getpid())
     with pytest.raises(sqlite3.ProgrammingError):
         conn.execute("SELECT 1")
-    _close_dead_thread_connection(conn, os.getpid())  # closing twice (e.g. after Database.close()) is a no-op
+    close_dead_thread_connection(conn, os.getpid())  # closing twice (e.g. after Database.close()) is a no-op

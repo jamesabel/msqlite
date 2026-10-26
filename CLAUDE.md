@@ -40,11 +40,20 @@ uv build
 
 ## Architecture
 
-**Single module design:** The entire implementation is in `src/msqlite/msqlite.py`. The public API (`Database`, `Transaction`, `MSQLite`, `Stats`, `MSQLiteTimeoutError`, `MSQLiteMaxRetriesError`, `MSQLiteNoSchemaException`, `WriteMode`, `type_to_sqlite_type`) is re-exported from `src/msqlite/__init__.py`. `MSQLite` is a thin wrapper over `Database(persistent=False, wal=False)` so both share one retry implementation.
+**Package layout:** The public API (`Database`, `Transaction`, `MSQLite`, `Stats`, `MSQLiteTimeoutError`, `MSQLiteMaxRetriesError`, `MSQLiteNoSchemaException`, `WriteMode`, `type_to_sqlite_type`) is exported from `src/msqlite/__init__.py`; `src/msqlite/msqlite.py` is a compatibility shim that re-exports the same names. The implementation is split by concern into private modules:
 
-**Retry engine:** Lock errors are detected by SQLite result code (`SQLITE_BUSY`/`SQLITE_LOCKED`, primary code masked from the extended code); `SQLITE_BUSY_SNAPSHOT` is never retried. `_WaitState` tracks per-transaction waited time and retries across `BEGIN`, single `execute` calls and `COMMIT`. `timeout_s` bounds total wait (raises `MSQLiteTimeoutError`), `retry_limit` bounds retries (raises the subclass `MSQLiteMaxRetriesError`). SQLite's own busy timeout is set per connection and capped to the remaining deadline. Backoff is jittered exponential: `random() * min(retry_scale * 2**retries, retry_cap_s)`.
+- `_errors.py`: the exceptions and the classification of `sqlite3` errors (`is_lock_error`, `is_stale_snapshot_error`, `is_missing_table_error`).
+- `_sql.py`: identifier and pragma validation, `type_to_sqlite_type`, and the `CREATE TABLE`/`CREATE INDEX` text for the auto-created table. Pure string handling.
+- `_stats.py`: the `Stats` dataclass and the lock-guarded `StatsCollector` that updates it.
+- `_retry.py`: `RetryPolicy` (deadline, retry limit, backoff and busy-timeout arithmetic, no I/O), `WaitState` (per-transaction bookkeeping) and `LockRetrier` (runs an attempt until it succeeds or the budget is spent).
+- `_connections.py`: `ConnectionManager` (open and configure connections, one per thread, fork-safe, finalizers) and `ConnectionSlot`.
+- `_database.py`: `Database` wires the policy, retrier, connections and stats together; `Transaction` is the `BEGIN`/`COMMIT`/`ROLLBACK` context manager and routes every statement through one timed cursor path (`_run`).
+- `_single_table.py`: `MSQLite`, a thin wrapper over `Database(persistent=False, wal=False)`.
+- `_log.py`: the single `msqlite` logger every module uses; `_types.py`: shared type aliases.
 
-**Connections:** Opened with `autocommit=True`; the library issues `BEGIN`/`COMMIT`/`ROLLBACK` itself. Persistent connections live in a `threading.local` tagged with the pid so a forked child never reuses the parent's; the `_slots` registry is a `WeakSet` and each slot has a `weakref.finalize` that closes its connection when the owning thread ends (skipped for a connection inherited across a fork). `Transaction` closes every cursor it handed out on exit, because CPython's `Connection.close()` keeps the file lock until all statements are finalized.
+**Retry engine:** Lock errors are detected by SQLite result code (`SQLITE_BUSY`/`SQLITE_LOCKED`, primary code masked from the extended code); `SQLITE_BUSY_SNAPSHOT` is never retried. `BEGIN` (together with opening the connection), each single `execute` and `COMMIT` are each one `LockRetrier.run(state, attempt)` call sharing the transaction's `WaitState`. `timeout_s` bounds total wait (raises `MSQLiteTimeoutError`), `retry_limit` bounds retries (raises the subclass `MSQLiteMaxRetriesError`). SQLite's own busy timeout is set per connection and capped to the remaining deadline. Backoff is jittered exponential: `random() * min(retry_scale * 2**retries, retry_cap_s)`.
+
+**Connections:** Opened with `autocommit=True`; the library issues `BEGIN`/`COMMIT`/`ROLLBACK` itself. `ConnectionManager` keeps persistent connections in a `threading.local` tagged with the pid so a forked child never reuses the parent's; its `_slots` registry is a `WeakSet` and each slot has a `weakref.finalize` that closes its connection when the owning thread ends (skipped for a connection inherited across a fork). `Transaction` closes every cursor it handed out on exit, because CPython's `Connection.close()` keeps the file lock until all statements are finalized.
 
 **Automatic schema (`MSQLite`):** Pass a `schema` dict (column spec → Python type) and optional `indexes`. The table is created on the first `execute()` that hits "no such table". Omit `schema` when reading from an existing table.
 
