@@ -1,5 +1,7 @@
 """All tests in this module are AI-generated (Claude Code); its private helpers and constants are covered by this note."""
 
+import gc
+import os
 import sqlite3
 import threading
 import time
@@ -8,6 +10,7 @@ import pytest
 from beartype.roar import BeartypeCallHintParamViolation
 
 from msqlite import Database, MSQLiteMaxRetriesError, MSQLiteTimeoutError, Stats
+from msqlite.msqlite import _close_dead_thread_connection
 from test_msqlite.paths import get_temp_dir
 
 
@@ -228,3 +231,67 @@ def test_retry_limit_and_error_hierarchy():
     finally:
         holder.execute("ROLLBACK")
         holder.close()
+
+
+# AI-GENERATED TEST (Claude Code) - delete this line to make this test human-owned.
+def test_persistent_connection_is_closed_when_its_thread_ends():
+    """A finished thread must not leave its persistent connection open until close()."""
+    db_path = _fresh_db_path("test_database_dead_thread")
+    opened: list[sqlite3.Connection] = []
+    with Database(db_path, on_open=opened.append) as db:
+        with db.write() as tx:
+            tx.execute("CREATE TABLE t(x INTEGER)")
+
+        def worker() -> None:
+            with db.write() as tx:
+                tx.execute("INSERT INTO t VALUES (1)")
+
+        threads = [threading.Thread(target=worker) for _unused in range(50)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        gc.collect()  # CPython frees the slots as each thread exits; this covers interpreters that defer it
+
+        assert len(opened) == 51  # the main thread's connection plus one per worker
+        assert len(db._slots) == 1  # only the main thread's slot survives
+        for conn in opened[1:]:  # the workers' connections are closed ...
+            with pytest.raises(sqlite3.ProgrammingError):
+                conn.execute("SELECT 1")
+        opened[0].execute("SELECT 1")  # ... and the main thread's is still usable
+        with db.read() as tx:
+            assert tx.execute("SELECT count(*) FROM t").fetchone() == (50,)
+    with pytest.raises(sqlite3.ProgrammingError):
+        opened[0].execute("SELECT 1")  # close() shut the surviving connection
+
+
+# AI-GENERATED TEST (Claude Code) - delete this line to make this test human-owned.
+def test_close_after_threads_ended_is_harmless():
+    """close() after the finalizers have already closed the workers' connections must not raise."""
+    db_path = _fresh_db_path("test_database_close_after_threads")
+    db = Database(db_path)
+    with db.write() as tx:
+        tx.execute("CREATE TABLE t(x INTEGER)")
+
+    def worker() -> None:
+        with db.read():
+            pass
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    thread.join()
+    gc.collect()
+    db.close()
+    db.close()  # idempotent
+
+
+# AI-GENERATED TEST (Claude Code) - delete this line to make this test human-owned.
+def test_dead_thread_finalizer_leaves_a_forked_parents_connection_alone():
+    """The finalizer closes only connections opened in this process; one inherited across a fork is the parent's."""
+    conn = sqlite3.connect(":memory:", check_same_thread=False)
+    _close_dead_thread_connection(conn, os.getpid() + 1)  # looks like the parent's connection in a forked child
+    conn.execute("SELECT 1")  # still open
+    _close_dead_thread_connection(conn, os.getpid())
+    with pytest.raises(sqlite3.ProgrammingError):
+        conn.execute("SELECT 1")
+    _close_dead_thread_connection(conn, os.getpid())  # closing twice (e.g. after Database.close()) is a no-op

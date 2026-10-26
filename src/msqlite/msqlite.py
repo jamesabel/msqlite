@@ -186,12 +186,30 @@ class _WaitState:
 
 
 class _ConnectionSlot:
-    """A connection owned by one thread, tagged with the pid that opened it (connections must not survive a fork)."""
+    """
+    A connection owned by one thread, tagged with the pid that opened it (connections must not survive a fork).
+
+    A persistent slot is referenced only by its thread's ``threading.local`` (and by a running ``Transaction``),
+    so it is collected when the thread ends; :func:`_close_dead_thread_connection` then closes its connection.
+    """
 
     def __init__(self, conn: sqlite3.Connection, busy_timeout_ms: int):
         self.conn = conn
         self.pid = os.getpid()
         self.busy_timeout_ms = busy_timeout_ms
+
+
+def _close_dead_thread_connection(conn: sqlite3.Connection, pid: int) -> None:
+    """
+    Finalizer for a :class:`_ConnectionSlot`: close its connection once the owning thread has ended.
+
+    Runs in whichever thread triggers the collection (allowed: connections are opened with
+    ``check_same_thread=False``). A connection inherited across a fork belongs to the parent and is left
+    alone, as in :meth:`Database.close`. Closing an already closed connection is a no-op, so a slot closed
+    by :meth:`Database.close` first is harmless here.
+    """
+    if pid == os.getpid():
+        conn.close()
 
 
 class Database:
@@ -207,8 +225,8 @@ class Database:
       jittered exponential backoff on ``BEGIN``, on each single ``execute`` and on ``COMMIT``,
       until ``timeout_s`` of total waiting or ``retry_limit`` retries. Statement retry re-executes
       only the failed statement; the transaction stays open, so earlier statements are kept.
-    * With ``persistent=True`` one connection per thread is kept open and reused across transactions.
-      Connections are never shared across threads or across a fork.
+    * With ``persistent=True`` one connection per thread is kept open and reused across transactions, and
+      closed when that thread ends. Connections are never shared across threads or across a fork.
 
     Instances are context managers: leaving the ``with`` block calls :meth:`close`.
     """
@@ -247,8 +265,8 @@ class Database:
         :param on_open: called with each newly opened ``sqlite3.Connection`` after the pragmas are applied (keyword only)
         :param on_retry: called as ``on_retry(attempt, elapsed_s, error)`` before each backoff sleep (keyword only)
         :param row_factory: ``sqlite3`` row factory applied to every cursor, e.g. ``sqlite3.Row`` (keyword only)
-        :param persistent: keep one connection per thread open across transactions; ``False`` opens and closes
-            a connection per transaction (keyword only)
+        :param persistent: keep one connection per thread open across transactions, closing it when the thread
+            ends; ``False`` opens and closes a connection per transaction (keyword only)
         """
         if retry_scale <= 0.0:
             raise ValueError("retry_scale must be positive")
@@ -273,7 +291,9 @@ class Database:
         self._stats = Stats()
         self._stats_lock = threading.Lock()
         self._local = threading.local()
-        self._slots: set[_ConnectionSlot] = set()
+        # Observes the live slots so close() can reach every thread's connection; it must not keep them alive,
+        # or a finished thread's connection would stay open until close(). Each slot's finalizer closes it.
+        self._slots: weakref.WeakSet[_ConnectionSlot] = weakref.WeakSet()
         self._slots_lock = threading.Lock()
 
     # ----------------------------------------------------------------- public API
@@ -374,6 +394,7 @@ class Database:
             slot = None
         if slot is None:
             slot = self._open_connection()
+            weakref.finalize(slot, _close_dead_thread_connection, slot.conn, slot.pid)  # holds conn and pid, never the slot
             self._local.slot = slot
             with self._slots_lock:
                 self._slots.add(slot)
