@@ -102,8 +102,9 @@ acquiring that write lock predictably:
    could not be re-applied safely; inside a write transaction they already hold the write lock,
    so they do not hit lock errors in practice.
 
-`Database` keeps one connection per thread and reuses it across transactions. Connections are
-never shared between threads and never carried across a fork (a forked child opens its own).
+`Database` keeps one connection per thread and reuses it across transactions; a thread's connection
+is closed when the thread ends. Connections are never shared between threads and never carried across
+a fork (a forked child opens its own).
 `MSQLite` opens and closes a connection per `with` block, which is what makes it process-safe
 with zero setup.
 

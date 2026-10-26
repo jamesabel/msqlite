@@ -4,6 +4,16 @@ All notable changes to msqlite are recorded here. The project follows
 [Semantic Versioning](https://semver.org/): breaking changes bump the major version, and a
 signature that changes keeps a deprecation shim for at least one minor version.
 
+## [1.0.1] - 2026-10-26
+
+### Fixed
+
+- `Database(persistent=True)` kept a finished thread's connection open until `close()` or interpreter
+  exit, so a long-lived `Database` used from short-lived threads (a recycling pool, a server, a library
+  called from its users' threads) accumulated one open connection per thread. A thread's connection is
+  now closed when the thread ends: the slot registry is a `WeakSet` and each connection has a
+  `weakref.finalize`. A connection inherited across a fork is left alone, as `close()` already did.
+
 ## [1.0.0] - 2026-09-20
 
 The general-purpose release: a multi-table `Database` layer next to the original
