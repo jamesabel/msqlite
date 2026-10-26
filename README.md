@@ -6,9 +6,11 @@
 
 SQLite access that is safe across threads and processes. msqlite takes the lock for you,
 retries with jittered backoff when another connection holds it, and gives up with a clear
-error at a deadline instead of hanging or raising `database is locked` at random.
+error at a deadline instead of hanging or raising `database is locked` at random. It is pure
+Python with no dependencies: one module on top of the standard library's `sqlite3`.
 
-- Zero dependencies beyond the standard library; ships `py.typed` and passes mypy strict.
+- Pure Python, zero dependencies. No compiled extension, so one wheel installs on every platform
+  and there is nothing to build. Ships `py.typed` and passes mypy strict.
 - `Database`: multi-table access with `write()` and `read()` transactions, WAL by default so
   readers never wait for a writer, and one reused connection per thread.
 - `MSQLite`: the original single-table helper with an auto-created schema. Unchanged API.
@@ -146,13 +148,17 @@ Database(
     retry_scale=0.01,       # base backoff unit in seconds
     retry_cap_s=1.0,        # upper bound of one backoff sleep
     busy_timeout_s=5.0,     # SQLite's own busy timeout per attempt
-    pragmas=("synchronous=FULL",),
-    on_open=lambda conn: conn.execute("PRAGMA foreign_keys=ON"),
-    on_retry=lambda attempt, elapsed_s, error: log.warning("retry %d after %.2fs: %s", attempt, elapsed_s, error),
-    row_factory=sqlite3.Row,
     persistent=True,        # one connection per thread, reused; False opens one per transaction
+    # The rest default to off; these are examples.
+    pragmas=("synchronous=FULL",),                                  # applied to every new connection
+    on_open=lambda conn: conn.execute("PRAGMA foreign_keys=ON"),    # after the pragmas
+    on_retry=lambda attempt, elapsed_s, error: log.warning("retry %d after %.2fs: %s", attempt, elapsed_s, error),
+    row_factory=sqlite3.Row,                                        # applied to every cursor
 )
 ```
+
+All arguments after the path are keyword-only. A pragma may be written with or without the
+`PRAGMA` prefix; one containing a `;` is rejected.
 
 `MSQLite(path, table, schema, indexes, *, retry_scale, retry_limit, timeout_s, retry_cap_s,
 busy_timeout_s, wal, mode, on_retry)` takes the same knobs. Its defaults keep the historical
@@ -160,10 +166,11 @@ behaviour: rollback journal, `EXCLUSIVE`, no deadline.
 
 ### Migrations
 
-`db.migrate(steps)` applies `(version, sql_script)` pairs keyed on `PRAGMA user_version`.
-Steps at or below the current version are skipped; the rest run in one write transaction, so a
-failing step rolls everything back and leaves `user_version` untouched. Projects with their own
-migrations table can ignore it.
+`db.migrate(steps)` applies `(version, sql_script)` pairs keyed on `PRAGMA user_version` and
+returns the resulting version. Versions must be positive and strictly increasing (`ValueError`
+otherwise). Steps at or below the current version are skipped; the rest run in one write
+transaction, so a failing step rolls everything back and leaves `user_version` untouched.
+Projects with their own migrations table can ignore it.
 
 ### Observability
 
@@ -171,22 +178,37 @@ migrations table can ignore it.
 `max_execution_s` and `max_wait_s`. `on_retry(attempt, elapsed_s, error)` is called before each
 backoff sleep. Log records go to the `msqlite.msqlite` logger.
 
+### Errors
+
+| Exception | Raised when |
+|-----------|-------------|
+| `MSQLiteTimeoutError(elapsed_s, attempts)` | the total lock wait in one transaction exceeds `timeout_s` |
+| `MSQLiteMaxRetriesError(elapsed_s, attempts, retry_limit)` | the retries in one transaction exceed `retry_limit`; a subclass of `MSQLiteTimeoutError` |
+| `MSQLiteNoSchemaException(table_name)` | `MSQLite.execute` hits "no such table" and no `schema` was given |
+| `sqlite3.OperationalError` with `SQLITE_BUSY_SNAPSHOT` | a `read()` transaction tried to write after another writer committed; raised at once, never retried |
+| `ValueError` | an invalid table or index name, pragma, migration version order, or an unsupported schema type |
+
+`MSQLiteTimeoutError` subclasses `sqlite3.OperationalError`, so existing `except
+sqlite3.OperationalError` handlers keep working. The transaction is rolled back and, for
+`MSQLite`, the connection closed before the error reaches the caller. Any other
+`sqlite3` error passes through untouched.
+
 ## Benchmark
 
 Write latency for one single-row insert per transaction while N processes contend for the same
 file. Each process does 20 writes; the table shows the latency distribution of the `with` block
 (lock acquisition, the insert and the commit) and the aggregate throughput.
 
-Measured on Windows-11-10.0.26200-SP0, Python 3.14.3, SQLite 3.50.4 (a desktop with an NVMe SSD; numbers on CI runners or laptops will differ):
+Measured on Windows-11-10.0.26300-SP0, Python 3.14.9, SQLite 3.50.4 (a desktop with an NVMe SSD; numbers on CI runners or laptops will differ):
 
 | Mode | Processes | Median (ms) | p95 (ms) | Max (ms) | Writes/s |
 |------|----------:|------------:|---------:|---------:|---------:|
-| Database.write() (WAL, IMMEDIATE, persistent connection) | 1 | 0.6 | 1.1 | 3 | 1160 |
-| Database.write() (WAL, IMMEDIATE, persistent connection) | 10 | 0.6 | 1.1 | 256 | 747 |
-| Database.write() (WAL, IMMEDIATE, persistent connection) | 100 | 0.6 | 35.2 | 5787 | 345 |
-| MSQLite (rollback journal, EXCLUSIVE, connection per access) | 1 | 2.3 | 2.5 | 3 | 419 |
-| MSQLite (rollback journal, EXCLUSIVE, connection per access) | 10 | 2.3 | 49.0 | 814 | 233 |
-| MSQLite (rollback journal, EXCLUSIVE, connection per access) | 100 | 2.4 | 1503.9 | 17106 | 117 |
+| Database.write() (WAL, IMMEDIATE, persistent connection) | 1 | 0.6 | 0.9 | 4 | 1188 |
+| Database.write() (WAL, IMMEDIATE, persistent connection) | 10 | 0.6 | 1.2 | 216 | 875 |
+| Database.write() (WAL, IMMEDIATE, persistent connection) | 100 | 0.6 | 28.7 | 5535 | 360 |
+| MSQLite (rollback journal, EXCLUSIVE, connection per access) | 1 | 2.8 | 3.1 | 4 | 353 |
+| MSQLite (rollback journal, EXCLUSIVE, connection per access) | 10 | 2.3 | 92.5 | 1139 | 169 |
+| MSQLite (rollback journal, EXCLUSIVE, connection per access) | 100 | 2.3 | 519.4 | 15408 | 129 |
 
 Per-write latency is dominated by the commit's fsync and, under contention, by waiting for the
 other writers: with 100 processes each write queues behind up to 99 others. The rollback-journal
@@ -212,7 +234,7 @@ pip install -e .
 pytest                         # includes a 200-process contention test; -m "not slow" skips the slowest
 ruff format src test_msqlite scripts && ruff check src test_msqlite scripts
 mypy                           # strict, configured in pyproject.toml
-python -m build                # or: uv build
+pip install build && python -m build   # or: uv build
 ```
 
 Tests run on the minimum supported Python, the latest stable release and the upcoming
