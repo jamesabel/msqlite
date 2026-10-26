@@ -4,6 +4,25 @@ All notable changes to msqlite are recorded here. The project follows
 [Semantic Versioning](https://semver.org/): breaking changes bump the major version, and a
 signature that changes keeps a deprecation shim for at least one minor version.
 
+## [Unreleased]
+
+### Changed
+
+- The implementation is split into private modules by concern (`_retry`, `_connections`, `_stats`, `_sql`,
+  `_errors`, `_database`, `_single_table`). The public API is unchanged and `from msqlite.msqlite import ...`
+  still works. `BEGIN`, single statements and `COMMIT` now go through one retry loop (`LockRetrier`) over a pure
+  `RetryPolicy`; `Transaction.execute`, `executemany` and `executescript` share one timed cursor path.
+- Log records go to the `msqlite` logger. They used to go to `msqlite.msqlite`, a child of it, so a handler or
+  level on `msqlite` already received them; only a filter on the exact old name needs updating.
+
+### Fixed
+
+- Lock-error detection assumed every `sqlite3.OperationalError` carries `sqlite_errorcode`. One constructed in
+  Python rather than raised by the engine has no such attribute, so the documented message fallback raised
+  `AttributeError` instead of running. Found by the new unit test for the fallback.
+- `pragmas=("PRAGMA",)` (the prefix with nothing after it) was accepted and failed later when the connection
+  opened; it is now rejected up front like an empty pragma.
+
 ## [1.0.2] - 2026-10-26
 
 ### Changed

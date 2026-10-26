@@ -176,7 +176,7 @@ Projects with their own migrations table can ignore it.
 
 `db.stats` (and `MSQLite.stats`) is a `Stats` dataclass with `executions`, `retries`,
 `max_execution_s` and `max_wait_s`. `on_retry(attempt, elapsed_s, error)` is called before each
-backoff sleep. Log records go to the `msqlite.msqlite` logger.
+backoff sleep. Log records go to the `msqlite` logger.
 
 ### Errors
 
