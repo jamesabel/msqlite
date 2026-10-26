@@ -6,11 +6,12 @@ on:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    # Pinned to the current LTS image rather than ubuntu-latest, so the OS changes only when this line does.
+    runs-on: ubuntu-26.04
     permissions:
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.2
       - run: uv build
       - run: uv publish --trusted-publishing always
