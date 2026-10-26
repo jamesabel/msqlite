@@ -10,6 +10,8 @@ signature that changes keeps a deprecation shim for at least one minor version.
 
 - Test matrix moved to Python 3.12 (minimum), 3.15 (latest stable) and 3.16 (pre-release); lint, type
   checking and the coverage badge run on 3.15. Added the 3.16 classifier.
+- CI installs its interpreters with `astral-sh/setup-uv`, which carries pre-release Pythons before
+  `actions/setup-python` does, and installs the dev dependencies wheels-only (`uv pip install --no-build`).
 
 ## [1.0.1] - 2026-10-26
 
