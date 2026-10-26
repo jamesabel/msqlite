@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "msqlite"
-version = "1.0.2"
+version = "1.1.0"
 description = "SQLite access that is safe across threads and processes: bounded, retried locking with WAL readers"
 readme = "README.md"
 authors = [{ name = "James Abel", email = "j@abel.co" }]

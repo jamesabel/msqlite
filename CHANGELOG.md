@@ -4,7 +4,7 @@ All notable changes to msqlite are recorded here. The project follows
 [Semantic Versioning](https://semver.org/): breaking changes bump the major version, and a
 signature that changes keeps a deprecation shim for at least one minor version.
 
-## [Unreleased]
+## [1.1.0] - 2026-10-26
 
 ### Changed
 
