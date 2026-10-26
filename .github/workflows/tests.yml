@@ -8,9 +8,10 @@ on:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    # Pinned to the current LTS image rather than ubuntu-latest, so the OS changes only when these lines do.
+    runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: "3.15"
@@ -21,7 +22,7 @@ jobs:
       - run: uv run mypy
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false  # a pre-release failure must not cancel the stable runs
       matrix:
@@ -29,7 +30,7 @@ jobs:
         # upcoming pre-release. Update when a new Python is released or a pre-release appears.
         python-version: ["3.12", "3.15", "3.16"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # uv installs the interpreter: it ships a pre-release Python (python-build-standalone) weeks
       # before actions/setup-python has a build for the runner image.
       - uses: astral-sh/setup-uv@v10.3.2
@@ -50,7 +51,7 @@ jobs:
         run: uv run pytest
       - name: Update coverage badge
         if: matrix.python-version == '3.15' && github.ref == 'refs/heads/main'
-        uses: schneegans/dynamic-badges-action@v1.7.0
+        uses: schneegans/dynamic-badges-action@v1.9.0
         with:
           auth: ${{ secrets.GIST_TOKEN }}
           gistID: 073de6201c5dc8c7d26d464af31c2a4b
