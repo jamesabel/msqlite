@@ -228,13 +228,15 @@ helper pays for opening a connection per access and for `EXCLUSIVE` locking. Rep
 
 ## Development
 
+The project is managed with [uv](https://docs.astral.sh/uv/): `pyproject.toml` holds the dev
+dependency group and `uv.lock` pins it.
+
 ```bash
-pip install -r requirements-dev.txt
-pip install -e .
-pytest                         # includes a 200-process contention test; -m "not slow" skips the slowest
-ruff format src test_msqlite scripts && ruff check src test_msqlite scripts
-mypy                           # strict, configured in pyproject.toml
-pip install build && python -m build   # or: uv build
+uv sync --no-build             # .venv with the package (editable) and the dev group, wheels only
+uv run pytest                  # includes a 200-process contention test; -m "not slow" skips the slowest
+uv run ruff format src test_msqlite scripts && uv run ruff check src test_msqlite scripts
+uv run mypy                    # strict, configured in pyproject.toml
+uv build
 ```
 
 Tests run on the minimum supported Python, the latest stable release and the upcoming

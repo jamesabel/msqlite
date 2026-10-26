@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build>=0.13.4,<0.14.0"]
+build-backend = "uv_build"
 
 [project]
 name = "msqlite"
@@ -8,7 +8,8 @@ version = "1.0.1"
 description = "SQLite access that is safe across threads and processes: bounded, retried locking with WAL readers"
 readme = "README.md"
 authors = [{ name = "James Abel", email = "j@abel.co" }]
-license = { file="LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 keywords = ["sqlite", "multithread", "multiprocess", "wal", "concurrency"]
 classifiers = [
   "Programming Language :: Python :: 3",
@@ -18,7 +19,6 @@ classifiers = [
   "Programming Language :: Python :: 3.15",
   "Programming Language :: Python :: 3.16",
   "Typing :: Typed",
-  "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
 ]
 requires-python = ">=3.12"
@@ -27,6 +27,23 @@ dependencies = []
 [project.urls]
 Source = "https://github.com/jamesabel/msqlite"
 Changelog = "https://github.com/jamesabel/msqlite/blob/main/CHANGELOG.md"
+
+[dependency-groups]
+# Installed by `uv sync`; the package itself has no dependencies.
+dev = [
+    # testing
+    "beartype",
+    "coverage",
+    "pytest",
+    "pytest-xdist",
+    "pytest-pycharm",
+    "pytest-cov",
+    # linters
+    "ruff",
+    # mypy runs in the lint job (3.15). Its compiled helper librt has no wheel for the 3.16 pre-release yet,
+    # and nothing is built from source, so the marker keeps mypy out of the 3.16 environment.
+    "mypy; python_version < '3.16'",
+]
 
 [tool.ruff]
 line-length = 192

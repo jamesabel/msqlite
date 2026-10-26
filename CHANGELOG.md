@@ -10,8 +10,12 @@ signature that changes keeps a deprecation shim for at least one minor version.
 
 - Test matrix moved to Python 3.12 (minimum), 3.15 (latest stable) and 3.16 (pre-release); lint, type
   checking and the coverage badge run on 3.15. Added the 3.16 classifier.
-- CI installs its interpreters with `astral-sh/setup-uv`, which carries pre-release Pythons before
-  `actions/setup-python` does, and installs the dev dependencies wheels-only (`uv pip install --no-build`).
+- The project is managed with uv: the dev dependencies are a `dev` dependency group in `pyproject.toml`
+  pinned by `uv.lock` (`requirements-dev.txt` is gone), the build backend is `uv_build`, and both workflows
+  run on `astral-sh/setup-uv`, which carries pre-release Pythons before `actions/setup-python` does. CI
+  installs with `uv sync --locked --no-build`, so a dependency without a wheel fails instead of being
+  built from source; releases run `uv build` and `uv publish`.
+- License metadata uses the PEP 639 `license` and `license-files` fields instead of the deprecated classifier.
 
 ## [1.0.1] - 2026-10-26
 

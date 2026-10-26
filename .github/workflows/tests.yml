@@ -14,11 +14,11 @@ jobs:
       - uses: astral-sh/setup-uv@v10
         with:
           python-version: "3.15"
-          activate-environment: true
-      - run: uv pip install --no-build -r requirements-dev.txt
-      - run: ruff check src test_msqlite scripts
-      - run: ruff format --check src test_msqlite scripts
-      - run: mypy
+          enable-cache: true
+      - run: uv sync --locked --no-build
+      - run: uv run ruff check src test_msqlite scripts
+      - run: uv run ruff format --check src test_msqlite scripts
+      - run: uv run mypy
 
   test:
     runs-on: ubuntu-latest
@@ -35,20 +35,19 @@ jobs:
       - uses: astral-sh/setup-uv@v10
         with:
           python-version: ${{ matrix.python-version }}
-          activate-environment: true
+          enable-cache: true
       # Wheels only: a dependency without a wheel for this Python is substituted or the version waits,
       # never built from source.
-      - run: uv pip install --no-build -r requirements-dev.txt
-      - run: uv pip install -e .
+      - run: uv sync --locked --no-build
       - name: Run tests with coverage
         if: matrix.python-version == '3.15'
         run: |
-          pytest --cov=msqlite --cov-report=term | tee coverage.txt
+          uv run pytest --cov=msqlite --cov-report=term | tee coverage.txt
           COVERAGE=$(grep "^TOTAL" coverage.txt | awk '{print $NF}' | tr -d '%')
           echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
       - name: Run tests
         if: matrix.python-version != '3.15'
-        run: pytest
+        run: uv run pytest
       - name: Update coverage badge
         if: matrix.python-version == '3.15' && github.ref == 'refs/heads/main'
         uses: schneegans/dynamic-badges-action@v1.7.0
