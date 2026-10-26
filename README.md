@@ -6,9 +6,11 @@
 
 SQLite access that is safe across threads and processes. msqlite takes the lock for you,
 retries with jittered backoff when another connection holds it, and gives up with a clear
-error at a deadline instead of hanging or raising `database is locked` at random.
+error at a deadline instead of hanging or raising `database is locked` at random. It is pure
+Python with no dependencies: one module on top of the standard library's `sqlite3`.
 
-- Zero dependencies beyond the standard library; ships `py.typed` and passes mypy strict.
+- Pure Python, zero dependencies. No compiled extension, so one wheel installs on every platform
+  and there is nothing to build. Ships `py.typed` and passes mypy strict.
 - `Database`: multi-table access with `write()` and `read()` transactions, WAL by default so
   readers never wait for a writer, and one reused connection per thread.
 - `MSQLite`: the original single-table helper with an auto-created schema. Unchanged API.
