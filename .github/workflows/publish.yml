@@ -9,9 +9,12 @@ jobs:
     # Pinned to the current LTS image rather than ubuntu-latest, so the OS changes only when this line does.
     runs-on: ubuntu-26.04
     permissions:
-      id-token: write
+      id-token: write # OIDC token for trusted publishing and for signing the attestations
+      contents: read
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.2
       - run: uv build
-      - run: uv publish --trusted-publishing always
+      # Uploads through the PyPI trusted publisher and attaches Provenance (PEP 740 attestations), which
+      # `uv publish` did not.
+      - uses: pypa/gh-action-pypi-publish@release/v1
