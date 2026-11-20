@@ -1,6 +1,7 @@
 ![Tests](https://github.com/jamesabel/msqlite/actions/workflows/tests.yml/badge.svg)
 ![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/jamesabel/073de6201c5dc8c7d26d464af31c2a4b/raw/coverage.json)
 ![Publish to PyPI](https://github.com/jamesabel/msqlite/actions/workflows/publish.yml/badge.svg)
+![PyPI downloads](https://img.shields.io/pypi/dm/msqlite)
 ![Python versions](https://img.shields.io/pypi/pyversions/msqlite)
 ![Free-threaded Python](https://img.shields.io/badge/free--threaded-3.14t%20%7C%203.15t-blue?logo=python&logoColor=white)
 
