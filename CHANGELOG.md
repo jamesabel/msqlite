@@ -6,8 +6,25 @@ signature that changes keeps a deprecation shim for at least one minor version.
 
 ## [Unreleased]
 
+### Added
+
+- Free-threaded Python is supported and tested: CI runs the suite on 3.14t and 3.15t, with
+  [gilguard](https://pypi.org/project/gilguard/) failing the run if any import re-enables the GIL. The package
+  carries the `Programming Language :: Python :: Free Threading :: 3 - Stable` classifier and the README has
+  Python version and free-threaded badges. msqlite is pure Python, so the same wheel serves both builds.
+
+### Fixed
+
+- `Database.close()` while another thread was in a transaction closed that thread's connection under it, which
+  crashed the interpreter (an access violation, on standard and free-threaded builds alike). A connection in
+  use is now closed when its transaction ends; idle connections are closed at once, as before.
+- A `BEGIN` that failed with anything other than a lock error did not give its connection back: with
+  `persistent=False` the connection was left open until garbage collection.
+
 ### Changed
 
+- A nested transaction on one thread is detected by the connection being in use rather than by
+  `Connection.in_transaction`; it raises the same `RuntimeError`.
 - CI runs on an explicit `ubuntu-26.04` image instead of `ubuntu-latest`, and the actions are current: `actions/checkout@v7` and `schneegans/dynamic-badges-action@v1.9.0` (both on Node 24).
 
 ## [1.1.0] - 2026-10-26

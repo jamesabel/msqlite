@@ -28,7 +28,9 @@ jobs:
       matrix:
         # Policy: test on the minimum supported version, the latest stable release and the
         # upcoming pre-release. Update when a new Python is released or a pre-release appears.
-        python-version: ["3.12", "3.15", "3.16"]
+        # Free-threaded builds follow the same rule: the first supported one (3.14t) and the latest
+        # stable (3.15t). gilguard (conftest.py) fails those runs if anything re-enables the GIL.
+        python-version: ["3.12", "3.15", "3.16", "3.14t", "3.15t"]
     steps:
       - uses: actions/checkout@v7
       # uv installs the interpreter: it ships a pre-release Python (python-build-standalone) weeks
@@ -40,6 +42,9 @@ jobs:
       # Wheels only: a dependency without a wheel for this Python is substituted or the version waits,
       # never built from source.
       - run: uv sync --locked --no-build
+      - name: Check that no installed package re-enables the GIL
+        if: endsWith(matrix.python-version, 't')
+        run: uv run python -m gilguard
       - name: Run tests with coverage
         if: matrix.python-version == '3.15'
         run: |

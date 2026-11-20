@@ -295,3 +295,110 @@ def test_dead_thread_finalizer_leaves_a_forked_parents_connection_alone():
     with pytest.raises(sqlite3.ProgrammingError):
         conn.execute("SELECT 1")
     close_dead_thread_connection(conn, os.getpid())  # closing twice (e.g. after Database.close()) is a no-op
+
+
+# AI-GENERATED TEST (Claude Code) - delete this line to make this test human-owned.
+def test_close_leaves_another_threads_transaction_running():
+    """close() must not close a connection under a running transaction; it is closed when the transaction ends."""
+    db_path = _fresh_db_path("test_database_close_during_transaction")
+    db = Database(db_path)
+    with db.write() as tx:
+        tx.execute("CREATE TABLE t(x INTEGER)")
+    in_transaction = threading.Event()
+    closed = threading.Event()
+    connections: list[sqlite3.Connection] = []
+    errors: list[BaseException] = []
+
+    def worker() -> None:
+        try:
+            with db.write() as tx:
+                connections.append(tx.connection)
+                tx.execute("INSERT INTO t VALUES (1)")
+                in_transaction.set()
+                assert closed.wait(10.0)
+                tx.execute("INSERT INTO t VALUES (2)")  # the connection is still open after close()
+            with pytest.raises(sqlite3.ProgrammingError):
+                connections[0].execute("SELECT 1")  # closed as the transaction ended
+            with db.read() as tx:  # the next transaction opens a new connection
+                connections.append(tx.connection)
+                assert tx.execute("SELECT count(*) FROM t").fetchone() == (2,)
+        except (AssertionError, sqlite3.Error, RuntimeError) as e:
+            errors.append(e)
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    assert in_transaction.wait(10.0)
+    db.close()
+    closed.set()
+    thread.join()
+    assert errors == []
+    assert len(connections) == 2
+    assert connections[1] is not connections[0]
+    db.close()
+
+
+# AI-GENERATED TEST (Claude Code) - delete this line to make this test human-owned.
+def test_close_inside_own_transaction_is_deferred():
+    """close() from inside a transaction on the same thread lets that transaction finish and commit."""
+    db_path = _fresh_db_path("test_database_close_inside_transaction")
+    db = Database(db_path)
+    with db.write() as tx:
+        tx.execute("CREATE TABLE t(x INTEGER)")
+        conn = tx.connection
+        db.close()
+        tx.execute("INSERT INTO t VALUES (1)")
+    with pytest.raises(sqlite3.ProgrammingError):
+        conn.execute("SELECT 1")
+    with db.read() as tx:
+        assert tx.execute("SELECT count(*) FROM t").fetchone() == (1,)
+    db.close()
+
+
+# AI-GENERATED TEST (Claude Code) - delete this line to make this test human-owned.
+def test_close_while_threads_transact():
+    """Repeated close() while other threads write: no crash, no error, no lost write, and the file ends up unlocked."""
+    db_path = _fresh_db_path("test_database_close_race")
+    db = Database(db_path)
+    with db.write() as tx:
+        tx.execute("CREATE TABLE t(x INTEGER)")
+    stop = threading.Event()
+    written = []
+    errors: list[BaseException] = []
+
+    def worker() -> None:
+        count = 0
+        try:
+            while not stop.is_set():
+                with db.write() as tx:
+                    tx.execute("INSERT INTO t VALUES (1)")
+                count += 1
+        except (sqlite3.Error, RuntimeError) as e:
+            errors.append(e)
+        written.append(count)
+
+    threads = [threading.Thread(target=worker) for _unused in range(8)]
+    for thread in threads:
+        thread.start()
+    deadline = time.monotonic() + 1.5
+    while time.monotonic() < deadline:
+        db.close()
+        time.sleep(0.001)
+    stop.set()
+    for thread in threads:
+        thread.join()
+    db.close()
+    assert errors == []
+    with Database(db_path, timeout_s=5.0) as fresh, fresh.write("exclusive") as tx:  # nothing still holds a lock
+        assert tx.execute("SELECT count(*) FROM t").fetchone() == (sum(written),)
+    assert sum(written) > 0
+
+
+# AI-GENERATED TEST (Claude Code) - delete this line to make this test human-owned.
+def test_failed_begin_releases_the_connection():
+    """A BEGIN that fails with something other than a lock error must not leave the thread's connection marked in use."""
+    db_path = _fresh_db_path("test_database_failed_begin")
+    with Database(db_path, on_open=lambda conn: conn.execute("BEGIN")) as db:  # every BEGIN from msqlite now fails
+        for _unused in range(2):  # the second attempt fails the same way, not as a nested transaction
+            with pytest.raises(sqlite3.OperationalError, match="within a transaction"):
+                with db.write():
+                    pass

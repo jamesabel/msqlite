@@ -171,7 +171,10 @@ class Database:
         return current
 
     def close(self) -> None:
-        """Close every connection this instance has opened (in any thread). Safe to call more than once."""
+        """
+        Close every connection this instance has opened (in any thread). Safe to call more than once, and safe
+        while other threads are in a transaction: such a connection is closed when its transaction ends.
+        """
         self._connections.close_all()
 
     def __enter__(self) -> Self:
@@ -187,15 +190,15 @@ class Database:
         statement = f"BEGIN {mode.upper()}"
 
         def attempt() -> ConnectionSlot:
-            slot = self._connections.acquire()
+            slot = self._connections.acquire()  # raises RuntimeError for a nested transaction on this thread
+            begun = False
             try:
-                if slot.conn.in_transaction:
-                    raise RuntimeError(f'a transaction is already active on this thread for "{self.db_path}"; nested transactions are not supported')
                 slot.set_busy_timeout(self._retry_policy.busy_timeout_ms(state))
                 slot.conn.execute(statement)
-            except sqlite3.OperationalError:
-                self._connections.release(slot)  # a non-persistent connection is closed; a persistent one is reused
-                raise
+                begun = True
+            finally:
+                if not begun:
+                    self._connections.release(slot)  # a non-persistent connection is closed; a persistent one is reused
             return slot
 
         return self._retrier.run(state, attempt)

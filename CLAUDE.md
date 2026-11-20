@@ -65,4 +65,4 @@ Tests are in `test_msqlite/` with `conftest.py` enabling beartype runtime type c
 
 ## Release policy
 
-Semantic versioning with `CHANGELOG.md`; a changed signature keeps a deprecation shim for one minor version. Python versions tested: minimum supported (3.12), latest stable (3.15) and the pre-release (3.16), with the policy noted next to the matrix in `.github/workflows/tests.yml`. Publishing runs from the GitHub release workflow (`uv build` then `pypa/gh-action-pypi-publish` with trusted publishing, which attaches Provenance); never upload to PyPI by hand.
+Semantic versioning with `CHANGELOG.md`; a changed signature keeps a deprecation shim for one minor version. Python versions tested: minimum supported (3.12), latest stable (3.15), the pre-release (3.16) and the free-threaded builds 3.14t and 3.15t (gilguard, imported in `conftest.py`, fails those runs if an import re-enables the GIL), with the policy noted next to the matrix in `.github/workflows/tests.yml`. Publishing runs from the GitHub release workflow (`uv build` then `pypa/gh-action-pypi-publish` with trusted publishing, which attaches Provenance); never upload to PyPI by hand.
