@@ -402,3 +402,72 @@ def test_failed_begin_releases_the_connection():
             with pytest.raises(sqlite3.OperationalError, match="within a transaction"):
                 with db.write():
                     pass
+
+
+# AI-GENERATED TEST (Claude Code) - delete this line to make this test human-owned.
+def test_connection_from_another_process_is_neither_reused_nor_closed(monkeypatch):
+    """A connection opened under another pid (as after a fork) is the parent's: not reused, and not closed by close()."""
+    real_pid = os.getpid()
+    db_path = _fresh_db_path("test_database_other_pid")
+    opened: list[sqlite3.Connection] = []
+    db = Database(db_path, on_open=opened.append)
+    try:
+        with db.write() as tx:
+            tx.execute("CREATE TABLE t(x INTEGER)")
+            parents = tx.connection
+
+        monkeypatch.setattr(os, "getpid", lambda: real_pid + 1)  # from here on this looks like a forked child
+        with db.write() as tx:
+            assert tx.connection is not parents  # the child opened its own
+            childs = tx.connection
+            tx.execute("INSERT INTO t VALUES (1)")
+        assert len(db._connections._slots) == 1  # the inherited slot was dropped, the child's is registered
+        parents.execute("SELECT 1")  # dropping it did not close it
+        db.close()
+        with pytest.raises(sqlite3.ProgrammingError):
+            childs.execute("SELECT 1")  # close() shut the child's own connection
+
+        monkeypatch.setattr(os, "getpid", lambda: real_pid)  # back in the "parent": open and register a connection
+        with db.read() as tx:
+            parents = tx.connection
+        monkeypatch.setattr(os, "getpid", lambda: real_pid + 1)
+        db.close()  # in the "child", with only the inherited connection registered
+        assert parents.execute("SELECT count(*) FROM t").fetchone() == (1,)  # close() left it alone
+    finally:
+        monkeypatch.undo()
+        for conn in opened:
+            conn.close()  # the "parent's" connections were deliberately left open above
+
+
+# AI-GENERATED TEST (Claude Code) - delete this line to make this test human-owned.
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="os.fork is not available on this platform")
+@pytest.mark.filterwarnings("ignore:.*fork.*:DeprecationWarning")  # pytest plugins may have left threads running
+def test_forked_child_opens_its_own_connection():
+    """A real fork: the child must not use or close the parent's connection, and both keep working on the file."""
+    db_path = _fresh_db_path("test_database_fork")
+    db = Database(db_path)
+    with db.write() as tx:
+        tx.execute("CREATE TABLE t(who TEXT)")
+        parents = tx.connection
+
+    child_pid = os.fork()
+    if child_pid == 0:  # the child: report through the exit status and never return into pytest
+        status = 1
+        try:
+            db.close()  # must leave the inherited connection alone
+            with db.write() as tx:
+                assert tx.connection is not parents
+                tx.execute("INSERT INTO t VALUES ('child')")
+            db.close()
+            status = 0
+        finally:
+            os._exit(status)
+
+    _unused_pid, wait_status = os.waitpid(child_pid, 0)
+    assert os.waitstatus_to_exitcode(wait_status) == 0
+    with db.write() as tx:
+        assert tx.connection is parents  # still the parent's, still open
+        tx.execute("INSERT INTO t VALUES ('parent')")
+    with db.read() as tx:
+        assert tx.execute("SELECT who FROM t ORDER BY who").fetchall() == [("child",), ("parent",)]
+    db.close()
