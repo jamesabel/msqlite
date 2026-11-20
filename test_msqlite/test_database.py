@@ -2,6 +2,7 @@
 
 import gc
 import os
+import signal
 import sqlite3
 import threading
 import time
@@ -295,3 +296,229 @@ def test_dead_thread_finalizer_leaves_a_forked_parents_connection_alone():
     with pytest.raises(sqlite3.ProgrammingError):
         conn.execute("SELECT 1")
     close_dead_thread_connection(conn, os.getpid())  # closing twice (e.g. after Database.close()) is a no-op
+
+
+# AI-GENERATED TEST (Claude Code) - delete this line to make this test human-owned.
+def test_close_leaves_another_threads_transaction_running():
+    """close() must not close a connection under a running transaction; it is closed when the transaction ends."""
+    db_path = _fresh_db_path("test_database_close_during_transaction")
+    db = Database(db_path)
+    with db.write() as tx:
+        tx.execute("CREATE TABLE t(x INTEGER)")
+    in_transaction = threading.Event()
+    closed = threading.Event()
+    connections: list[sqlite3.Connection] = []
+    errors: list[BaseException] = []
+
+    def worker() -> None:
+        try:
+            with db.write() as tx:
+                connections.append(tx.connection)
+                tx.execute("INSERT INTO t VALUES (1)")
+                in_transaction.set()
+                assert closed.wait(10.0)
+                tx.execute("INSERT INTO t VALUES (2)")  # the connection is still open after close()
+            with pytest.raises(sqlite3.ProgrammingError):
+                connections[0].execute("SELECT 1")  # closed as the transaction ended
+            with db.read() as tx:  # the next transaction opens a new connection
+                connections.append(tx.connection)
+                assert tx.execute("SELECT count(*) FROM t").fetchone() == (2,)
+        except (AssertionError, sqlite3.Error, RuntimeError) as e:
+            errors.append(e)
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    assert in_transaction.wait(10.0)
+    db.close()
+    closed.set()
+    thread.join()
+    assert errors == []
+    assert len(connections) == 2
+    assert connections[1] is not connections[0]
+    db.close()
+
+
+# AI-GENERATED TEST (Claude Code) - delete this line to make this test human-owned.
+def test_close_inside_own_transaction_is_deferred():
+    """close() from inside a transaction on the same thread lets that transaction finish and commit."""
+    db_path = _fresh_db_path("test_database_close_inside_transaction")
+    db = Database(db_path)
+    with db.write() as tx:
+        tx.execute("CREATE TABLE t(x INTEGER)")
+        conn = tx.connection
+        db.close()
+        tx.execute("INSERT INTO t VALUES (1)")
+    with pytest.raises(sqlite3.ProgrammingError):
+        conn.execute("SELECT 1")
+    with db.read() as tx:
+        assert tx.execute("SELECT count(*) FROM t").fetchone() == (1,)
+    db.close()
+
+
+# AI-GENERATED TEST (Claude Code) - delete this line to make this test human-owned.
+def test_close_while_threads_transact():
+    """Repeated close() while other threads write: no crash, no error, no lost write, and the file ends up unlocked."""
+    db_path = _fresh_db_path("test_database_close_race")
+    db = Database(db_path)
+    with db.write() as tx:
+        tx.execute("CREATE TABLE t(x INTEGER)")
+    stop = threading.Event()
+    written = []
+    errors: list[BaseException] = []
+
+    def worker() -> None:
+        count = 0
+        try:
+            while not stop.is_set():
+                with db.write() as tx:
+                    tx.execute("INSERT INTO t VALUES (1)")
+                count += 1
+        except (sqlite3.Error, RuntimeError) as e:
+            errors.append(e)
+        written.append(count)
+
+    threads = [threading.Thread(target=worker) for _unused in range(8)]
+    for thread in threads:
+        thread.start()
+    deadline = time.monotonic() + 1.5
+    while time.monotonic() < deadline:
+        db.close()
+        time.sleep(0.001)
+    stop.set()
+    for thread in threads:
+        thread.join()
+    db.close()
+    assert errors == []
+    with Database(db_path, timeout_s=5.0) as fresh, fresh.write("exclusive") as tx:  # nothing still holds a lock
+        assert tx.execute("SELECT count(*) FROM t").fetchone() == (sum(written),)
+    assert sum(written) > 0
+
+
+# AI-GENERATED TEST (Claude Code) - delete this line to make this test human-owned.
+def test_failed_begin_releases_the_connection():
+    """A BEGIN that fails with something other than a lock error must not leave the thread's connection marked in use."""
+    db_path = _fresh_db_path("test_database_failed_begin")
+    with Database(db_path, on_open=lambda conn: conn.execute("BEGIN")) as db:  # every BEGIN from msqlite now fails
+        for _unused in range(2):  # the second attempt fails the same way, not as a nested transaction
+            with pytest.raises(sqlite3.OperationalError, match="within a transaction"):
+                with db.write():
+                    pass
+
+
+# AI-GENERATED TEST (Claude Code) - delete this line to make this test human-owned.
+def test_connection_from_another_process_is_neither_reused_nor_closed(monkeypatch):
+    """A connection opened under another pid (as after a fork) is the parent's: not reused, and not closed by close()."""
+    real_pid = os.getpid()
+    db_path = _fresh_db_path("test_database_other_pid")
+    opened: list[sqlite3.Connection] = []
+    db = Database(db_path, on_open=opened.append)
+    try:
+        with db.write() as tx:
+            tx.execute("CREATE TABLE t(x INTEGER)")
+            parents = tx.connection
+
+        monkeypatch.setattr(os, "getpid", lambda: real_pid + 1)  # from here on this looks like a forked child
+        with db.write() as tx:
+            assert tx.connection is not parents  # the child opened its own
+            childs = tx.connection
+            tx.execute("INSERT INTO t VALUES (1)")
+        assert len(db._connections._slots) == 1  # the inherited slot was dropped, the child's is registered
+        parents.execute("SELECT 1")  # dropping it did not close it
+        db.close()
+        with pytest.raises(sqlite3.ProgrammingError):
+            childs.execute("SELECT 1")  # close() shut the child's own connection
+
+        monkeypatch.setattr(os, "getpid", lambda: real_pid)  # back in the "parent": open and register a connection
+        with db.read() as tx:
+            parents = tx.connection
+        monkeypatch.setattr(os, "getpid", lambda: real_pid + 1)
+        db.close()  # in the "child", with only the inherited connection registered
+        assert parents.execute("SELECT count(*) FROM t").fetchone() == (1,)  # close() left it alone
+    finally:
+        monkeypatch.undo()
+        for conn in opened:
+            conn.close()  # the "parent's" connections were deliberately left open above
+
+
+# AI-GENERATED TEST (Claude Code) - delete this line to make this test human-owned.
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="os.fork is not available on this platform")
+@pytest.mark.filterwarnings("ignore:.*fork.*:DeprecationWarning")  # pytest plugins may have left threads running
+def test_forked_child_opens_its_own_connection():
+    """A real fork: the child must not use or close the parent's connection, and both keep working on the file."""
+    db_path = _fresh_db_path("test_database_fork")
+    db = Database(db_path)
+    with db.write() as tx:
+        tx.execute("CREATE TABLE t(who TEXT)")
+        parents = tx.connection
+
+    child_pid = os.fork()
+    if child_pid == 0:  # the child: report through the exit status and never return into pytest
+        status = 1
+        try:
+            db.close()  # must leave the inherited connection alone
+            with db.write() as tx:
+                assert tx.connection is not parents
+                tx.execute("INSERT INTO t VALUES ('child')")
+            db.close()
+            status = 0
+        finally:
+            os._exit(status)
+
+    _unused_pid, wait_status = os.waitpid(child_pid, 0)
+    assert os.waitstatus_to_exitcode(wait_status) == 0
+    with db.write() as tx:
+        assert tx.connection is parents  # still the parent's, still open
+        tx.execute("INSERT INTO t VALUES ('parent')")
+    with db.read() as tx:
+        assert tx.execute("SELECT who FROM t ORDER BY who").fetchall() == [("child",), ("parent",)]
+    db.close()
+
+
+# AI-GENERATED TEST (Claude Code) - delete this line to make this test human-owned.
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="os.fork is not available on this platform")
+@pytest.mark.filterwarnings("ignore:.*fork.*:DeprecationWarning")  # the fork below is multi-threaded on purpose
+def test_fork_while_another_thread_holds_the_internal_locks():
+    """A child forked while another thread is inside msqlite's locks must not inherit them locked and hang."""
+    db_path = _fresh_db_path("test_database_fork_locks_held")
+    db = Database(db_path)
+    with db.write() as tx:
+        tx.execute("CREATE TABLE t(who TEXT)")
+    holding = threading.Event()
+    release = threading.Event()
+
+    def holder() -> None:  # stands in for a thread caught mid-acquire() and mid-record_execution() by the fork
+        with db._connections._slots_lock, db._stats._lock:
+            holding.set()
+            release.wait(60.0)
+
+    thread = threading.Thread(target=holder)
+    thread.start()
+    assert holding.wait(10.0)
+    try:
+        child_pid = os.fork()
+        if child_pid == 0:  # the child: report through the exit status and never return into pytest
+            status = 1
+            try:
+                with db.write() as tx:  # takes both locks; the thread that held them does not exist here
+                    tx.execute("INSERT INTO t VALUES ('child')")
+                db.close()
+                status = 0
+            finally:
+                os._exit(status)
+
+        deadline = time.monotonic() + 20.0
+        finished_pid, wait_status = os.waitpid(child_pid, os.WNOHANG)
+        while finished_pid == 0 and time.monotonic() < deadline:
+            time.sleep(0.05)
+            finished_pid, wait_status = os.waitpid(child_pid, os.WNOHANG)
+        if finished_pid == 0:  # deadlocked on an inherited lock
+            os.kill(child_pid, signal.SIGKILL)
+            os.waitpid(child_pid, 0)
+            pytest.fail("the forked child hung on a lock that was held in the parent at fork time")
+        assert os.waitstatus_to_exitcode(wait_status) == 0
+    finally:
+        release.set()
+        thread.join()
+    with db.read() as tx:  # the parent's locks were released normally and still work
+        assert tx.execute("SELECT who FROM t").fetchall() == [("child",)]
+    db.close()

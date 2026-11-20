@@ -1,6 +1,8 @@
 ![Tests](https://github.com/jamesabel/msqlite/actions/workflows/tests.yml/badge.svg)
 ![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/jamesabel/073de6201c5dc8c7d26d464af31c2a4b/raw/coverage.json)
 ![Publish to PyPI](https://github.com/jamesabel/msqlite/actions/workflows/publish.yml/badge.svg)
+![Python versions](https://img.shields.io/pypi/pyversions/msqlite)
+![Free-threaded Python](https://img.shields.io/badge/free--threaded-3.14t%20%7C%203.15t-blue?logo=python&logoColor=white)
 
 # msqlite
 
@@ -14,7 +16,8 @@ Python with no dependencies: one module on top of the standard library's `sqlite
 - `Database`: multi-table access with `write()` and `read()` transactions, WAL by default so
   readers never wait for a writer, and one reused connection per thread.
 - `MSQLite`: the original single-table helper with an auto-created schema. Unchanged API.
-- Python 3.12 and later.
+- Python 3.12 and later, including the free-threaded builds (3.14t, 3.15t): the test suite runs on
+  them in CI with the GIL off.
 
 ```bash
 pip install msqlite
@@ -106,7 +109,8 @@ acquiring that write lock predictably:
 
 `Database` keeps one connection per thread and reuses it across transactions; a thread's connection
 is closed when the thread ends. Connections are never shared between threads and never carried across
-a fork (a forked child opens its own).
+a fork (a forked child opens its own). `close()` is safe to call while other threads are in a
+transaction: their connections are closed when those transactions end.
 `MSQLite` opens and closes a connection per `with` block, which is what makes it process-safe
 with zero setup.
 

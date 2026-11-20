@@ -3,13 +3,17 @@
 All tests in this module are AI-generated (Claude Code); its private helpers and constants are covered by this note.
 """
 
+import os
 import sqlite3
+import threading
+import time
 
 import pytest
 
 import msqlite
 import msqlite.msqlite as compat
 from msqlite import Database, MSQLiteMaxRetriesError, MSQLiteTimeoutError
+from msqlite._locks import ForkSafeLock
 from msqlite._errors import is_lock_error, is_missing_table_error, is_stale_snapshot_error
 from msqlite._retry import RetryPolicy, WaitState
 from msqlite._sql import create_index_sql, create_table_sql, normalize_pragma
@@ -96,3 +100,45 @@ def test_database_exposes_its_configuration():
         assert db.retry_scale == 0.05
         assert db.retry_cap_s == 0.2
         assert db.busy_timeout_s == 0.5
+
+
+# AI-GENERATED TEST (Claude Code) - delete this line to make this test human-owned.
+def test_fork_safe_lock_is_fresh_in_another_process(monkeypatch):
+    """A lock held under one pid must not block a process with another pid (a forked child); within a pid it excludes."""
+    real_pid = os.getpid()
+    lock = ForkSafeLock()
+    order: list[str] = []
+
+    lock.__enter__()  # held, as if by a thread that the fork did not copy
+    try:
+        waiter_started = threading.Event()
+
+        def waiter() -> None:
+            waiter_started.set()
+            with lock:
+                order.append("waiter")
+
+        thread = threading.Thread(target=waiter)
+        thread.start()
+        assert waiter_started.wait(10.0)
+        time.sleep(0.2)
+        assert order == []  # same pid: mutual exclusion holds
+        order.append("holder")
+    finally:
+        lock.__exit__(None, None, None)
+    thread.join(10.0)
+    assert order == ["holder", "waiter"]
+
+    lock.__enter__()  # held again in the "parent"
+    monkeypatch.setattr(os, "getpid", lambda: real_pid + 1)  # now this looks like the forked child
+    acquired = threading.Event()
+
+    def child() -> None:
+        with lock:
+            acquired.set()
+
+    thread = threading.Thread(target=child)
+    thread.start()
+    thread.join(10.0)
+    assert acquired.is_set()  # not blocked by the parent's held lock
+    assert list(lock._locks) == [real_pid + 1]  # the parent's lock is dropped in the child
