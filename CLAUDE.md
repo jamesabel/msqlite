@@ -49,6 +49,7 @@ uv build
 - `_connections.py`: `ConnectionManager` (open and configure connections, one per thread, fork-safe, finalizers) and `ConnectionSlot`.
 - `_database.py`: `Database` wires the policy, retrier, connections and stats together; `Transaction` is the `BEGIN`/`COMMIT`/`ROLLBACK` context manager and routes every statement through one timed cursor path (`_run`).
 - `_single_table.py`: `MSQLite`, a thin wrapper over `Database(persistent=False, wal=False)`.
+- `_locks.py`: `ForkSafeLock`, a mutex kept per process id so a forked child never inherits it locked; used by `ConnectionManager` and `StatsCollector`.
 - `_log.py`: the single `msqlite` logger every module uses; `_types.py`: shared type aliases.
 
 **Retry engine:** Lock errors are detected by SQLite result code (`SQLITE_BUSY`/`SQLITE_LOCKED`, primary code masked from the extended code); `SQLITE_BUSY_SNAPSHOT` is never retried. `BEGIN` (together with opening the connection), each single `execute` and `COMMIT` are each one `LockRetrier.run(state, attempt)` call sharing the transaction's `WaitState`. `timeout_s` bounds total wait (raises `MSQLiteTimeoutError`), `retry_limit` bounds retries (raises the subclass `MSQLiteMaxRetriesError`). SQLite's own busy timeout is set per connection and capped to the remaining deadline. Backoff is jittered exponential: `random() * min(retry_scale * 2**retries, retry_cap_s)`.

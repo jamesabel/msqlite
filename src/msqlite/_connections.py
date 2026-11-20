@@ -13,6 +13,7 @@ import weakref
 from collections.abc import Sequence
 from pathlib import Path
 
+from ._locks import ForkSafeLock
 from ._sql import normalize_pragma
 from ._types import OnOpen
 
@@ -81,8 +82,8 @@ class ConnectionManager:
         # or a finished thread's connection would stay open until close_all(). Each slot's finalizer closes it.
         self._slots: weakref.WeakSet[ConnectionSlot] = weakref.WeakSet()
         # Guards _local, _slots and every slot's in_use/close_when_released. Never held while a connection
-        # is opened, used or closed.
-        self._slots_lock = threading.Lock()
+        # is opened, used or closed. Fork-safe: a child forked while another thread holds it gets its own.
+        self._slots_lock = ForkSafeLock()
 
     def acquire(self) -> ConnectionSlot:
         """Return this thread's connection, opening one if needed (or a fresh one when not persistent).

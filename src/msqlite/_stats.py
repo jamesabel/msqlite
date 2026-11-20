@@ -1,7 +1,8 @@
 """Execution and lock-wait counters, and the thread-safe collector that maintains them."""
 
-import threading
 from dataclasses import dataclass
+
+from ._locks import ForkSafeLock
 
 
 @dataclass
@@ -25,7 +26,7 @@ class StatsCollector:
 
     def __init__(self) -> None:
         self.stats = Stats()
-        self._lock = threading.Lock()
+        self._lock = ForkSafeLock()  # a child forked while another thread records a statement gets its own
 
     def record_execution(self, execution_s: float) -> None:
         """Count one statement and keep the longest execution time."""

@@ -2,6 +2,7 @@
 
 import gc
 import os
+import signal
 import sqlite3
 import threading
 import time
@@ -470,4 +471,54 @@ def test_forked_child_opens_its_own_connection():
         tx.execute("INSERT INTO t VALUES ('parent')")
     with db.read() as tx:
         assert tx.execute("SELECT who FROM t ORDER BY who").fetchall() == [("child",), ("parent",)]
+    db.close()
+
+
+# AI-GENERATED TEST (Claude Code) - delete this line to make this test human-owned.
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="os.fork is not available on this platform")
+@pytest.mark.filterwarnings("ignore:.*fork.*:DeprecationWarning")  # the fork below is multi-threaded on purpose
+def test_fork_while_another_thread_holds_the_internal_locks():
+    """A child forked while another thread is inside msqlite's locks must not inherit them locked and hang."""
+    db_path = _fresh_db_path("test_database_fork_locks_held")
+    db = Database(db_path)
+    with db.write() as tx:
+        tx.execute("CREATE TABLE t(who TEXT)")
+    holding = threading.Event()
+    release = threading.Event()
+
+    def holder() -> None:  # stands in for a thread caught mid-acquire() and mid-record_execution() by the fork
+        with db._connections._slots_lock, db._stats._lock:
+            holding.set()
+            release.wait(60.0)
+
+    thread = threading.Thread(target=holder)
+    thread.start()
+    assert holding.wait(10.0)
+    try:
+        child_pid = os.fork()
+        if child_pid == 0:  # the child: report through the exit status and never return into pytest
+            status = 1
+            try:
+                with db.write() as tx:  # takes both locks; the thread that held them does not exist here
+                    tx.execute("INSERT INTO t VALUES ('child')")
+                db.close()
+                status = 0
+            finally:
+                os._exit(status)
+
+        deadline = time.monotonic() + 20.0
+        finished_pid, wait_status = os.waitpid(child_pid, os.WNOHANG)
+        while finished_pid == 0 and time.monotonic() < deadline:
+            time.sleep(0.05)
+            finished_pid, wait_status = os.waitpid(child_pid, os.WNOHANG)
+        if finished_pid == 0:  # deadlocked on an inherited lock
+            os.kill(child_pid, signal.SIGKILL)
+            os.waitpid(child_pid, 0)
+            pytest.fail("the forked child hung on a lock that was held in the parent at fork time")
+        assert os.waitstatus_to_exitcode(wait_status) == 0
+    finally:
+        release.set()
+        thread.join()
+    with db.read() as tx:  # the parent's locks were released normally and still work
+        assert tx.execute("SELECT who FROM t").fetchall() == [("child",)]
     db.close()

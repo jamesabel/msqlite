@@ -18,6 +18,9 @@ signature that changes keeps a deprecation shim for at least one minor version.
 - `Database.close()` while another thread was in a transaction closed that thread's connection under it, which
   crashed the interpreter (an access violation, on standard and free-threaded builds alike). A connection in
   use is now closed when its transaction ends; idle connections are closed at once, as before.
+- A process forked while another thread was inside one of msqlite's internal locks (the connection registry or
+  the statistics) inherited that lock locked, and the child hung on its first transaction. The locks are now
+  per process, so a forked child starts with its own.
 - A `BEGIN` that failed with anything other than a lock error did not give its connection back: with
   `persistent=False` the connection was left open until garbage collection.
 
